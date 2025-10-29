@@ -1,0 +1,427 @@
+import express from 'express';
+import { Database } from '../database.js';
+
+const router = express.Router();
+const db = new Database();
+
+// 获取所有订单（支持分页、搜索和筛选）
+router.get('/', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      pageSize = 20,
+      search = '',
+      mark = '',
+      exportTimeFilter = '',
+      exportStartDate = '',
+      exportEndDate = '',
+      sortBy = 'created_at',
+      sortOrder = 'DESC'
+    } = req.query;
+
+    // 参数验证
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSizeNum = Math.max(1, parseInt(pageSize)); // 移除页面大小限制以支持全量显示
+    const offset = (pageNum - 1) * pageSizeNum;
+
+    // 构建查询条件
+    let whereConditions = [];
+    let queryParams = [];
+
+    // 搜索条件（针对订单号、客户姓名、电话、地址）
+    if (search) {
+      whereConditions.push(`(
+        order_number LIKE ? OR 
+        customer_name LIKE ? OR 
+        phone LIKE ? OR 
+        address LIKE ?
+      )`);
+      const searchPattern = `%${search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    }
+
+    // 状态筛选
+    if (mark) {
+      whereConditions.push('mark = ?');
+      queryParams.push(mark);
+    }
+
+    // 导出时间筛选（仅在mark为exported时生效）
+    if (mark === 'exported' && exportTimeFilter) {
+      // 系统已经是东八区时间，直接使用
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      // 转换为数据库时间格式（东八区）
+      const formatToDbTime = (date) => {
+        // 直接格式化为本地时间字符串
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      };
+
+      if (exportTimeFilter === 'today') {
+        whereConditions.push('exported_at >= ? AND exported_at < ?');
+        queryParams.push(
+          formatToDbTime(today),
+          formatToDbTime(tomorrow)
+        );
+      } else if (exportTimeFilter === 'yesterday') {
+        whereConditions.push('exported_at >= ? AND exported_at < ?');
+        queryParams.push(
+          formatToDbTime(yesterday),
+          formatToDbTime(today)
+        );
+      } else if (exportTimeFilter === 'custom' && exportStartDate && exportEndDate) {
+        const startDate = new Date(exportStartDate);
+        const endDate = new Date(exportEndDate);
+        endDate.setHours(23, 59, 59, 999); // 包含结束日期的整天
+        
+        whereConditions.push('exported_at >= ? AND exported_at <= ?');
+        queryParams.push(
+          formatToDbTime(startDate),
+          formatToDbTime(endDate)
+        );
+      }
+    }
+
+    // 构建WHERE子句
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // 验证排序字段
+    const allowedSortFields = ['created_at', 'updated_at', 'order_number', 'customer_name'];
+    const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
+    const validSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    // 获取总数（用于分页信息）
+    const countQuery = `SELECT COUNT(*) as total FROM orders ${whereClause}`;
+    const countResult = await db.query(countQuery, queryParams);
+    const total = countResult[0].total;
+
+    // 获取分页数据
+    const dataQuery = `
+      SELECT * FROM orders 
+      ${whereClause} 
+      ORDER BY ${validSortBy} ${validSortOrder} 
+      LIMIT ? OFFSET ?
+    `;
+    const orders = await db.query(dataQuery, [...queryParams, pageSizeNum, offset]);
+
+    // 计算分页信息
+    const totalPages = Math.ceil(total / pageSizeNum);
+    const hasNextPage = pageNum < totalPages;
+    const hasPrevPage = pageNum > 1;
+
+    res.json({
+      data: orders,
+      pagination: {
+        page: pageNum,
+        pageSize: pageSizeNum,
+        total,
+        totalPages,
+        hasNextPage,
+        hasPrevPage
+      },
+      filters: {
+        search,
+        mark,
+        sortBy: validSortBy,
+        sortOrder: validSortOrder
+      }
+    });
+  } catch (error) {
+    console.error('获取订单失败:', error);
+    res.status(500).json({ error: '获取订单失败' });
+  }
+});
+
+// 检查订单号是否存在
+router.get('/check/:orderNumber', async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    
+    if (!orderNumber) {
+      return res.status(400).json({ error: '订单号不能为空' });
+    }
+
+    const existingOrder = await db.get(
+      'SELECT id, order_number FROM orders WHERE order_number = ?',
+      [orderNumber]
+    );
+
+    res.json({
+      exists: !!existingOrder,
+      orderNumber: orderNumber
+    });
+  } catch (error) {
+    console.error('检查订单号失败:', error);
+    res.status(500).json({ error: '检查订单号失败' });
+  }
+});
+
+// 获取单个订单
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const orders = await db.query('SELECT * FROM orders WHERE id = ?', [id]);
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ error: '订单不存在' });
+    }
+    
+    res.json(orders[0]);
+  } catch (error) {
+    console.error('获取订单失败:', error);
+    res.status(500).json({ error: '获取订单失败' });
+  }
+});
+
+// 创建订单
+router.post('/', async (req, res) => {
+  try {
+    const { 
+      order_number, 
+      customer_name, 
+      phone, 
+      address, 
+      product_size,
+      product_category = '',
+      product_model = '',
+      product_specs = '',
+      quantity = 1,
+      transaction_time = '',
+      order_notes = '',
+      mark = 'pending_design'
+    } = req.body;
+    
+    if (!order_number || !customer_name || !phone || !address || !product_size) {
+      return res.status(400).json({ 
+        error: '缺少必要参数',
+        details: '订单号、客户姓名、电话、地址和产品尺寸为必填项'
+      });
+    }
+    
+    // 检查订单号是否已存在
+    const existingOrder = await db.query('SELECT id, order_number FROM orders WHERE order_number = ?', [order_number]);
+    if (existingOrder.length > 0) {
+      return res.status(400).json({ 
+        error: '订单号重复',
+        details: `订单号 "${order_number}" 已存在，请使用不同的订单号`,
+        code: 'DUPLICATE_ORDER_NUMBER'
+      });
+    }
+    
+    // 生成东八区时间
+    const beijingTime = new Date();
+    beijingTime.setHours(beijingTime.getHours() + 8);
+    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    const result = await db.run(
+      `INSERT INTO orders (
+        order_number, customer_name, phone, address, product_size,
+        product_category, product_model, product_specs, quantity,
+        transaction_time, order_notes, mark, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        order_number, customer_name, phone, address, product_size,
+        product_category, product_model, product_specs, quantity,
+        transaction_time, order_notes, mark, beijingTimeString, beijingTimeString
+      ]
+    );
+    
+    const newOrder = await db.query('SELECT * FROM orders WHERE id = ?', [result.id]);
+    res.status(201).json(newOrder[0]);
+  } catch (error) {
+    console.error('创建订单失败:', error);
+    if (error.message.includes('UNIQUE constraint failed')) {
+      res.status(400).json({ 
+        error: '订单号重复',
+        details: '该订单号已存在，请使用不同的订单号',
+        code: 'DUPLICATE_ORDER_NUMBER'
+      });
+    } else {
+      res.status(500).json({ 
+        error: '创建订单失败',
+        details: error.message
+      });
+    }
+  }
+});
+
+// 更新订单
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // 获取现有订单数据
+    const existingOrders = await db.query('SELECT * FROM orders WHERE id = ?', [id]);
+    if (existingOrders.length === 0) {
+      return res.status(404).json({ error: '订单不存在' });
+    }
+    
+    const existingOrder = existingOrders[0];
+    
+    // 只更新提供的字段，保留现有值
+    const updateData = {
+      order_number: req.body.order_number !== undefined ? req.body.order_number : existingOrder.order_number,
+      customer_name: req.body.customer_name !== undefined ? req.body.customer_name : existingOrder.customer_name,
+      phone: req.body.phone !== undefined ? req.body.phone : existingOrder.phone,
+      address: req.body.address !== undefined ? req.body.address : existingOrder.address,
+      product_size: req.body.product_size !== undefined ? req.body.product_size : existingOrder.product_size,
+      product_category: req.body.product_category !== undefined ? req.body.product_category : existingOrder.product_category,
+      product_model: req.body.product_model !== undefined ? req.body.product_model : existingOrder.product_model,
+      product_specs: req.body.product_specs !== undefined ? req.body.product_specs : existingOrder.product_specs,
+      quantity: req.body.quantity !== undefined ? req.body.quantity : existingOrder.quantity,
+      transaction_time: req.body.transaction_time !== undefined ? req.body.transaction_time : existingOrder.transaction_time,
+      order_notes: req.body.order_notes !== undefined ? req.body.order_notes : existingOrder.order_notes,
+      mark: req.body.mark !== undefined ? req.body.mark : existingOrder.mark,
+      export_status: req.body.export_status !== undefined ? req.body.export_status : existingOrder.export_status
+    };
+    
+    // 生成东八区时间
+    const beijingTime = new Date();
+    beijingTime.setHours(beijingTime.getHours() + 8);
+    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    await db.run(
+      `UPDATE orders SET 
+        order_number = ?, customer_name = ?, phone = ?, address = ?, 
+        product_size = ?, product_category = ?, product_model = ?,
+        product_specs = ?, quantity = ?, transaction_time = ?, order_notes = ?, mark = ?, export_status = ?,
+        updated_at = ? 
+      WHERE id = ?`,
+      [
+        updateData.order_number, updateData.customer_name, updateData.phone, updateData.address, 
+        updateData.product_size, updateData.product_category, updateData.product_model,
+        updateData.product_specs, updateData.quantity, updateData.transaction_time, 
+        updateData.order_notes, updateData.mark, updateData.export_status, beijingTimeString, id
+      ]
+    );
+    
+    const updatedOrder = await db.query('SELECT * FROM orders WHERE id = ?', [id]);
+    res.json(updatedOrder[0]);
+  } catch (error) {
+    console.error('更新订单失败:', error);
+    res.status(500).json({ error: '更新订单失败' });
+  }
+});
+
+// 删除订单
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.run('DELETE FROM orders WHERE id = ?', [id]);
+    res.json({ message: '订单删除成功' });
+  } catch (error) {
+    console.error('删除订单失败:', error);
+    res.status(500).json({ error: '删除订单失败' });
+  }
+});
+
+// 批量更新订单导出状态
+router.patch('/batch/export-status', async (req, res) => {
+  try {
+    const { orderIds, exportStatus } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: '订单ID列表不能为空' });
+    }
+    
+    if (!exportStatus || !['not_exported', 'exported'].includes(exportStatus)) {
+      return res.status(400).json({ error: '导出状态无效' });
+    }
+    
+    // 生成东八区时间
+    const beijingTime = new Date();
+    beijingTime.setHours(beijingTime.getHours() + 8);
+    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    const placeholders = orderIds.map(() => '?').join(',');
+    const exportedAtValue = exportStatus === 'exported' ? beijingTimeString : null;
+    
+    let sql, params;
+    if (exportStatus === 'exported') {
+      // 当设置为已导出时，同时更新mark字段为exported
+      sql = `UPDATE orders SET export_status = ?, exported_at = ?, mark = ?, updated_at = ? WHERE id IN (${placeholders})`;
+      params = [exportStatus, exportedAtValue, 'exported', beijingTimeString, ...orderIds];
+    } else {
+      // 当设置为未导出时，只更新export_status和exported_at，不改变mark
+      sql = `UPDATE orders SET export_status = ?, exported_at = ?, updated_at = ? WHERE id IN (${placeholders})`;
+      params = [exportStatus, exportedAtValue, beijingTimeString, ...orderIds];
+    }
+    
+    await db.run(sql, params);
+    
+    res.json({ 
+      message: `成功更新 ${orderIds.length} 个订单的导出状态`,
+      updatedCount: orderIds.length,
+      exportStatus
+    });
+  } catch (error) {
+    console.error('批量更新导出状态失败:', error);
+    res.status(500).json({ error: '批量更新导出状态失败' });
+  }
+});
+
+// 批量删除订单
+router.delete('/', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: '请提供要删除的订单ID列表' });
+    }
+    
+    // 构建删除查询
+    const placeholders = ids.map(() => '?').join(',');
+    const deleteQuery = `DELETE FROM orders WHERE id IN (${placeholders})`;
+    
+    await db.run(deleteQuery, ids);
+    
+    res.json({ 
+      message: `成功删除 ${ids.length} 个订单`,
+      deletedCount: ids.length 
+    });
+  } catch (error) {
+    console.error('批量删除订单失败:', error);
+    res.status(500).json({ error: '批量删除订单失败' });
+  }
+});
+
+// 导出订单
+router.get('/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await db.query('SELECT * FROM orders WHERE id = ?', [id]);
+    
+    if (order.length === 0) {
+      return res.status(404).json({ error: '订单不存在' });
+    }
+    
+    // 更新订单标记为已导出
+    const beijingTime = new Date();
+    beijingTime.setHours(beijingTime.getHours() + 8);
+    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    
+    await db.run(
+      'UPDATE orders SET mark = ?, updated_at = ? WHERE id = ?',
+      ['exported', beijingTimeString, id]
+    );
+    
+    // 这里应该实现导出逻辑
+    res.json({ message: '导出功能开发中', order: order[0] });
+  } catch (error) {
+    console.error('导出订单失败:', error);
+    res.status(500).json({ error: '导出订单失败' });
+  }
+});
+
+export default router;

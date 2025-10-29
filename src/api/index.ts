@@ -1,0 +1,386 @@
+const API_BASE_URL = 'http://localhost:3001/api';
+
+// 基础请求函数
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  const config: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  };
+
+  try {
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || '请求失败');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('API请求错误:', error);
+    throw error;
+  }
+}
+
+// 文件上传函数
+async function uploadFile(endpoint: string, file: File, data?: Record<string, any>) {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const formData = new FormData();
+  
+  formData.append('image', file);
+  
+  if (data) {
+    Object.keys(data).forEach(key => {
+      formData.append(key, data[key]);
+    });
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || '上传失败');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('文件上传错误:', error);
+    throw error;
+  }
+}
+
+// 设计预览上传（创建/更新）专用
+async function uploadDesignWithPreview<T>(endpoint: string, method: 'POST' | 'PUT', data: Record<string, any>, file?: File): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const formData = new FormData();
+
+  if (file) {
+    formData.append('preview', file);
+  }
+  Object.keys(data).forEach(key => {
+    formData.append(key, data[key] as any);
+  });
+
+  try {
+    const response = await fetch(url, {
+      method,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (e) {
+        // 如果响应不是JSON格式，使用默认错误消息
+        console.warn('无法解析错误响应:', e);
+      }
+      throw new Error(errorMessage);
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('网络请求失败');
+  }
+}
+
+// 订单相关API
+export const ordersAPI = {
+  getAll: (params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    mark?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const queryString = searchParams.toString();
+    return request<PaginatedResponse<Order> | Order[]>(`/orders${queryString ? `?${queryString}` : ''}`);
+  },
+  getById: (id: number) => request<Order>(`/orders/${id}`),
+  create: (data: CreateOrderData) => request<Order>('/orders', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: number, data: UpdateOrderData) => request<Order>(`/orders/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: number) => request<void>(`/orders/${id}`, {
+    method: 'DELETE',
+  }),
+  batchDelete: (ids: number[]) => request<{ message: string; deletedCount: number }>('/orders', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
+  checkOrderNumber: (orderNumber: string) => request<{ exists: boolean; orderNumber: string }>(`/orders/check/${encodeURIComponent(orderNumber)}`),
+  batchUpdateExportStatus: (orderIds: number[], exportStatus: 'not_exported' | 'exported') => 
+    request<{ message: string; updatedCount: number; exportStatus: string }>('/orders/batch/export-status', {
+      method: 'PATCH',
+      body: JSON.stringify({ orderIds, exportStatus }),
+    }),
+};
+
+// 模板相关API
+export const templatesAPI = {
+  getAll: (params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    category?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const queryString = searchParams.toString();
+    return request<PaginatedResponse<Template> | Template[]>(`/templates${queryString ? `?${queryString}` : ''}`);
+  },
+  getById: (id: number) => request<Template>(`/templates/${id}`),
+  create: (file: File, data: CreateTemplateData) => uploadFile('/templates', file, data),
+  delete: (id: number) => request<void>(`/templates/${id}`, {
+    method: 'DELETE',
+  }),
+  batchDelete: (ids: number[]) => request<{ message: string; deletedCount: number }>('/templates', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  }),
+  update: (id: number, data: UpdateTemplateData) => request<Template>(`/templates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+};
+
+// 分类相关API
+export const categoriesAPI = {
+  getAll: () => request<Category[]>('/categories'),
+  getById: (id: number) => request<Category>(`/categories/${id}`),
+  create: (data: CreateCategoryData) => request<Category>('/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: number, data: UpdateCategoryData) => request<Category>(`/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: number) => request<void>(`/categories/${id}`, {
+    method: 'DELETE',
+  }),
+  reorder: (categories: { id: number; sort_order: number }[]) => request<Category[]>('/categories/reorder', {
+    method: 'PATCH',
+    body: JSON.stringify({ categories }),
+  }),
+};
+
+// 设计相关API
+export const designsAPI = {
+  getByOrderId: (orderId: number) => request<Design[]>(`/designs/order/${orderId}`),
+  getById: (id: number) => request<Design>(`/designs/${id}`),
+  create: (data: CreateDesignData) => request<Design>('/designs', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: number, data: UpdateDesignData) => request<Design>(`/designs/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: number) => request<void>(`/designs/${id}`, {
+    method: 'DELETE',
+  }),
+  // 新增：带预览图的创建/更新
+  createWithPreview: (data: CreateDesignData, file: File) => uploadDesignWithPreview<Design>('/designs', 'POST', data, file),
+  updateWithPreview: (id: number, data: UpdateDesignData, file?: File) => uploadDesignWithPreview<Design>(`/designs/${id}`, 'PUT', data, file),
+};
+
+// 上传相关API
+export const uploadAPI = {
+  uploadImage: (file: File) => uploadFile('/upload/image', file),
+  exportOrder: (orderId: number) => {
+    window.open(`${API_BASE_URL}/upload/export/${orderId}`);
+  },
+  exportBatch: async (orderIds: number[]) => {
+    const response = await fetch(`${API_BASE_URL}/upload/export/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orderIds }),
+    });
+    if (!response.ok) {
+      throw new Error('批量导出失败');
+    }
+    return await response.blob();
+  },
+};
+
+// 类型定义
+export interface Order {
+  id: number;
+  order_number: string;
+  customer_name: string;
+  phone: string;
+  address: string;
+  product_size: string;
+  product_category?: string;
+  product_model?: string;
+  product_specs?: string;
+  quantity?: number;
+  transaction_time?: string;
+  order_notes?: string;
+  mark: 'pending_design' | 'pending_confirm' | 'confirmed' | 'exported';
+  export_status: 'not_exported' | 'exported';
+  exported_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOrderData {
+  order_number: string;
+  customer_name: string;
+  phone: string;
+  address: string;
+  product_size: string;
+  product_category?: string;
+  product_model?: string;
+  product_specs?: string;
+  quantity?: number;
+  transaction_time?: string;
+  order_notes?: string;
+  mark?: 'pending_design' | 'pending_confirm' | 'confirmed' | 'exported';
+  export_status?: 'not_exported' | 'exported';
+}
+
+export interface UpdateOrderData {
+  order_number?: string;
+  customer_name?: string;
+  phone?: string;
+  address?: string;
+  product_size?: string;
+  product_category?: string;
+  product_model?: string;
+  product_specs?: string;
+  quantity?: number;
+  transaction_time?: string;
+  order_notes?: string;
+  mark?: 'pending_design' | 'pending_confirm' | 'confirmed' | 'exported';
+  export_status?: 'not_exported' | 'exported';
+}
+
+export interface Template {
+  id: number;
+  name: string;
+  image_path: string;
+  thumbnail_path?: string;
+  category: string;
+  created_at: string;
+}
+
+export interface CreateTemplateData {
+  name: string;
+  category?: string;
+}
+
+export interface UpdateTemplateData {
+  name?: string;
+  category?: string;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  display_name: string;
+  description?: string;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCategoryData {
+  name: string;
+  display_name: string;
+  description?: string;
+  sort_order?: number;
+}
+
+export interface UpdateCategoryData {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  sort_order?: number;
+}
+
+export interface Design {
+  id: number;
+  order_id: number;
+  name: string;
+  canvas_data: string;
+  preview_path?: string;
+  width: number;
+  height: number;
+  background_type?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateDesignData {
+  order_id: number;
+  name: string;
+  canvas_data: string;
+  width?: number;
+  height?: number;
+  background_type?: string;
+}
+
+export interface UpdateDesignData {
+  name?: string;
+  canvas_data?: string;
+  width?: number;
+  height?: number;
+  background_type?: string;
+}
+
+// 分页响应类型
+export interface PaginationInfo {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationInfo;
+  filters?: Record<string, any>;
+}
