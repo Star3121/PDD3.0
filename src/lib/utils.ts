@@ -107,3 +107,20 @@ export function formatYMDHM(dateString: string): string {
   
   return `${year}年${month}月${day}日${hours}:${minutes}`;
 }
+
+// 构建图片URL
+export function buildImageUrl(imagePath: string): string {
+  if (!imagePath) return '';
+  
+  // 如果已经是完整URL，直接返回
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  
+  // 确保路径以/开头
+  const path = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  
+  // 使用环境变量或默认值构建完整URL
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3002');
+  return `${baseUrl}${path}`;
+}

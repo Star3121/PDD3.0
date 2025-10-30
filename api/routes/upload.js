@@ -3,10 +3,11 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
-import { Database } from '../database.js';
 
 const router = express.Router();
-const db = new Database();
+
+// 数据库实例将从服务器注入
+let db;
 
 // 配置文件上传
 const storage = multer.diskStorage({
@@ -35,18 +36,21 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
 
-// 上传图片
-router.post('/image', upload.single('image'), (req, res) => {
+// 上传图片（兼容字段名 'image' 与 'file'）
+router.post('/image', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), (req, res) => {
   try {
-    if (!req.file) {
+    const files = req.files || {};
+    const imageFile = (Array.isArray(files?.image) && files.image[0]) || (Array.isArray(files?.file) && files.file[0]);
+
+    if (!imageFile) {
       return res.status(400).json({ error: '请上传图片文件' });
     }
-    
-    const imagePath = `/uploads/images/${req.file.filename}`;
+
+    const imagePath = `/uploads/images/${imageFile.filename}`;
     res.json({ 
       message: '图片上传成功',
       imagePath: imagePath,
-      filename: req.file.filename
+      filename: imageFile.filename
     });
   } catch (error) {
     console.error('图片上传失败:', error);
@@ -229,5 +233,10 @@ router.post('/export/batch', async (req, res) => {
     res.status(500).json({ error: '批量导出失败' });
   }
 });
+
+// 设置数据库实例的函数
+export function setDatabase(database) {
+  db = database;
+}
 
 export default router;

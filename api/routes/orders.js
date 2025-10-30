@@ -1,8 +1,9 @@
 import express from 'express';
-import { Database } from '../database.js';
 
 const router = express.Router();
-const db = new Database();
+
+// 数据库实例将从服务器注入
+let db;
 
 // 获取所有订单（支持分页、搜索和筛选）
 router.get('/', async (req, res) => {
@@ -152,10 +153,11 @@ router.get('/check/:orderNumber', async (req, res) => {
       return res.status(400).json({ error: '订单号不能为空' });
     }
 
-    const existingOrder = await db.get(
+    const existingOrders = await db.query(
       'SELECT id, order_number FROM orders WHERE order_number = ?',
       [orderNumber]
     );
+    const existingOrder = existingOrders[0];
 
     res.json({
       exists: !!existingOrder,
@@ -423,5 +425,10 @@ router.get('/:id/export', async (req, res) => {
     res.status(500).json({ error: '导出订单失败' });
   }
 });
+
+// 设置数据库实例的函数
+export function setDatabase(database) {
+  db = database;
+}
 
 export default router;

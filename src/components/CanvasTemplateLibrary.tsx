@@ -3,6 +3,7 @@ import { templatesAPI, categoriesAPI } from '../api';
 import { Template, Category } from '../api/index';
 import TemplateSelectionModal from './TemplateSelectionModal';
 import CategoryTemplatesModal from './CategoryTemplatesModal';
+import { buildImageUrl } from '../lib/utils';
 
 interface CanvasTemplateLibraryProps {
   onTemplateSelect: (template: Template) => void;
@@ -217,7 +218,7 @@ const CanvasTemplateLibrary: React.FC<CanvasTemplateLibraryProps> = ({
               {/* 模板图片 */}
               <div className="aspect-square bg-gray-50 overflow-hidden">
                 <img
-                  src={`http://localhost:3001${template.image_path}`}
+                  src={buildImageUrl(template.image_path)}
                   alt={template.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   loading="lazy"

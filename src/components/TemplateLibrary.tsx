@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { templatesAPI, categoriesAPI } from '../api';
 import { Template, PaginatedResponse, Category } from '../api';
 import Pagination from './Pagination';
+import { buildImageUrl } from '../lib/utils';
 
 interface TemplateLibraryProps {
   onTemplateSelect: (template: Template) => void;
@@ -496,7 +497,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
               </div>
               
               <img
-                src={`http://localhost:3001${template.image_path}`}
+                src={buildImageUrl(template.image_path)}
                 alt={template.name}
                 className="w-full h-2/3 object-cover cursor-pointer"
                 onClick={() => onTemplateSelect(template)}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { templatesAPI } from '../api';
 import { Template } from '../api/index';
+import { buildImageUrl } from '../lib/utils';
 
 interface CategoryTemplatesModalProps {
   isOpen: boolean;
@@ -103,7 +104,7 @@ const CategoryTemplatesModal: React.FC<CategoryTemplatesModalProps> = ({
                   {/* 模板图片 */}
                   <div className="aspect-square bg-gray-50 overflow-hidden">
                     <img
-                      src={`http://localhost:3001${template.image_path}`}
+                      src={buildImageUrl(template.image_path)}
                       alt={template.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                       loading="lazy"

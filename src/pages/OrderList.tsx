@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 import OrderEditModal from '../components/OrderEditModal';
 import ExportConfirmModal from '../components/ExportConfirmModal';
 import Pagination from '../components/Pagination';
-import { formatRelativeTime, formatYMDHM } from '../lib/utils';
+import { formatRelativeTime, formatYMDHM, buildImageUrl } from '../lib/utils';
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 import { compressImageForHTML, getImageBlob, getExtensionFromBlob, sanitizeFilename } from '../lib/imageUtils';
@@ -241,7 +241,7 @@ const OrderList: React.FC = () => {
                 const target = (withPreview.length > 0 ? withPreview : designs)
                   .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())[0];
                 if (target?.preview_path) {
-                  previews[o.id] = `http://localhost:3001${target.preview_path}`;
+                  previews[o.id] = buildImageUrl(target.preview_path);
                 }
               }
             } catch (e) {
@@ -498,7 +498,7 @@ const OrderList: React.FC = () => {
                 // 回退到使用预览图
                 if (design.preview_path) {
                   try {
-                    const imageUrl = `http://localhost:3001${design.preview_path}`;
+                    const imageUrl = buildImageUrl(design.preview_path);
                     const compressedImage = await compressImageForHTML(imageUrl);
                     htmlContent += `<img src="${compressedImage}" alt="确认图片" class="thumbnail" style="margin: 5px;">`;
                   } catch (fallbackError) {
@@ -600,7 +600,7 @@ const OrderList: React.FC = () => {
               // 回退到使用预览图
               if (design.preview_path) {
                 try {
-                  const imageUrl = `http://localhost:3001${design.preview_path}`;
+                  const imageUrl = buildImageUrl(design.preview_path);
                   const imageBlob = await getImageBlob(imageUrl);
                   const extension = getExtensionFromBlob(imageBlob);
                   const productSpecs = sanitizeFilename(order.product_specs || '默认规格');

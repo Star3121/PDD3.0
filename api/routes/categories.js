@@ -1,8 +1,9 @@
 import express from 'express';
-import { Database } from '../database.js';
 
 const router = express.Router();
-const db = new Database();
+
+// 数据库实例将从服务器注入
+let db;
 
 // 获取所有分类
 router.get('/', async (req, res) => {
@@ -190,5 +191,10 @@ router.patch('/reorder', async (req, res) => {
     res.status(500).json({ error: '更新分类排序失败' });
   }
 });
+
+// 设置数据库实例的函数
+export function setDatabase(database) {
+  db = database;
+}
 
 export default router;

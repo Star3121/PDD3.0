@@ -2,10 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { Database } from '../database.js';
 
 const router = express.Router();
-const db = new Database();
+
+// 数据库实例将从服务器注入
+let db;
 
 // 配置图片上传
 const storage = multer.diskStorage({
@@ -168,5 +169,10 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: '删除设计失败' });
   }
 });
+
+// 设置数据库实例的函数
+export function setDatabase(database) {
+  db = database;
+}
 
 export default router;

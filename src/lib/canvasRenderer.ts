@@ -129,9 +129,9 @@ export async function renderCanvasToHighResImage(
               quality: 1,
             };
             
-            // 如果是高分辨率导出，设置更高的倍数
+            // 如果是高分辨率导出，设置适中的倍数（降低文件大小）
             if (highResolution) {
-              exportOptions.multiplier = CANVAS_CONFIG.PRINT_DPI / CANVAS_CONFIG.DISPLAY_DPI; // 300/72 ≈ 4.17倍
+              exportOptions.multiplier = 2; // 2倍分辨率，平衡质量和文件大小
             }
             
             // 导出透明背景图片
@@ -154,9 +154,9 @@ export async function renderCanvasToHighResImage(
               backgroundColor: '#ffffff',
             };
             
-            // 如果是高分辨率导出，设置更高的倍数
+            // 如果是高分辨率导出，设置适中的倍数（降低文件大小）
             if (highResolution) {
-              exportOptions.multiplier = CANVAS_CONFIG.PRINT_DPI / CANVAS_CONFIG.DISPLAY_DPI; // 300/72 ≈ 4.17倍
+              exportOptions.multiplier = 2; // 2倍分辨率，平衡质量和文件大小
             }
             
             // 导出为dataURL

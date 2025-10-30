@@ -2,12 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import ordersRouter from './routes/orders.js';
-import templatesRouter from './routes/templates.js';
-import designsRouter from './routes/designs.js';
-import uploadRouter from './routes/upload.js';
-import categoriesRouter from './routes/categories.js';
+import ordersRouter, { setDatabase as setOrdersDatabase } from './routes/orders.js';
+import templatesRouter, { setDatabase as setTemplatesDatabase } from './routes/templates.js';
+import designsRouter, { setDatabase as setDesignsDatabase } from './routes/designs.js';
+import uploadRouter, { setDatabase as setUploadDatabase } from './routes/upload.js';
+import categoriesRouter, { setDatabase as setCategoriesDatabase } from './routes/categories.js';
 import { Database } from './database.js';
+import { db as supabaseDb } from './database.supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +16,27 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// 初始化数据库
-const db = new Database();
+// 初始化数据库 - 优先使用Supabase，回退到SQLite
+let db;
+try {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    db = supabaseDb;
+    console.log('使用Supabase数据库');
+  } else {
+    db = new Database();
+    console.log('使用SQLite数据库');
+  }
+} catch (error) {
+  console.error('数据库初始化失败，使用SQLite:', error);
+  db = new Database();
+}
+
+// 将数据库实例注入到所有路由模块
+setOrdersDatabase(db);
+setTemplatesDatabase(db);
+setDesignsDatabase(db);
+setUploadDatabase(db);
+setCategoriesDatabase(db);
 
 // 中间件
 app.use(cors());

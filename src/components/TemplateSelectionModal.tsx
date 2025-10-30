@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { templatesAPI, categoriesAPI } from '../api';
 import { Template, Category } from '../api/index';
+import { buildImageUrl } from '../lib/utils';
 
 interface TemplateSelectionModalProps {
   isOpen: boolean;
@@ -160,7 +161,7 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
                 >
                   <div className="aspect-square overflow-hidden rounded-t-lg">
                     <img
-                      src={`http://localhost:3001${template.image_path}`}
+                      src={buildImageUrl(template.image_path)}
                       alt={template.name}
                       className="w-full h-full object-cover"
                     />

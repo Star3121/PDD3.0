@@ -5,6 +5,7 @@ import { Order, Design, Template } from '../api/index';
 import CanvasEditor, { CanvasEditorRef } from '../components/CanvasEditor';
 import CanvasTemplateLibrary from '../components/CanvasTemplateLibrary';
 import Layout from '../components/Layout';
+import { buildImageUrl } from '../lib/utils';
 
 const DesignEditor: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -62,7 +63,7 @@ const DesignEditor: React.FC = () => {
 
   const handleTemplateSelect = (template: Template) => {
     if (canvasRef.current) {
-      const url = `http://localhost:3001${template.image_path}`;
+      const url = buildImageUrl(template.image_path);
       canvasRef.current.addTemplateImage(url);
     }
   };

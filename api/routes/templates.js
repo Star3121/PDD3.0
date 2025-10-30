@@ -2,10 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { Database } from '../database.js';
 
 const router = express.Router();
-const db = new Database();
+
+// 数据库实例将从服务器注入
+let db;
 
 // 配置文件上传
 const storage = multer.diskStorage({
@@ -250,7 +251,7 @@ router.delete('/', async (req, res) => {
 
     // 获取要删除的模板信息
     const placeholders = ids.map(() => '?').join(',');
-    const templates = await db.all(
+    const templates = await db.query(
       `SELECT * FROM templates WHERE id IN (${placeholders})`,
       ids
     );
@@ -286,5 +287,10 @@ router.delete('/', async (req, res) => {
     res.status(500).json({ error: '批量删除模板失败' });
   }
 });
+
+// 设置数据库实例的函数
+export function setDatabase(database) {
+  db = database;
+}
 
 export default router;
