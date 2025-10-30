@@ -35,10 +35,5 @@
     "SUPABASE_URL": "@supabase-url",
     "SUPABASE_ANON_KEY": "@supabase-anon-key",
     "SUPABASE_SERVICE_KEY": "@supabase-service-key"
-  },
-  "functions": {
-    "api/index.js": {
-      "maxDuration": 30
-    }
   }
 }

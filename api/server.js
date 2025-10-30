@@ -15,16 +15,27 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+// 新增：检测是否运行在 Vercel Serverless 环境
+const isServerless = !!process.env.VERCEL;
 
 // 初始化数据库 - 优先使用Supabase，回退到SQLite
 let db;
 try {
-  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+  if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY)) {
     db = supabaseDb;
     console.log('使用Supabase数据库');
   } else {
-    db = new Database();
-    console.log('使用SQLite数据库');
+    if (isServerless) {
+      console.error('Vercel Serverless 环境缺少 Supabase 配置，无法使用本地SQLite。');
+      // 提供一个占位DB，调用时抛出更清晰的错误
+      db = {
+        query: async () => { throw new Error('Serverless环境未配置数据库，请在Vercel设置Supabase环境变量'); },
+        run: async () => { throw new Error('Serverless环境未配置数据库，请在Vercel设置Supabase环境变量'); }
+      };
+    } else {
+      db = new Database();
+      console.log('使用SQLite数据库');
+    }
   }
 } catch (error) {
   console.error('数据库初始化失败，使用SQLite:', error);
@@ -43,24 +54,28 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// 确保必要的目录存在
+// 确保必要的目录存在与静态文件服务（仅在非Serverless环境）
 import fs from 'fs';
-const dirs = [
-  path.join(process.cwd(), 'uploads'),
-  path.join(process.cwd(), 'uploads/templates'),
-  path.join(process.cwd(), 'uploads/designs'),
-  path.join(process.cwd(), 'uploads/images'),
-  path.join(process.cwd(), 'temp')
-];
+if (!isServerless) {
+  const dirs = [
+    path.join(process.cwd(), 'uploads'),
+    path.join(process.cwd(), 'uploads/templates'),
+    path.join(process.cwd(), 'uploads/designs'),
+    path.join(process.cwd(), 'uploads/images'),
+    path.join(process.cwd(), 'temp')
+  ];
 
-dirs.forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+  dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
 
-// 静态文件服务
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  // 静态文件服务
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+} else {
+  console.log('Vercel Serverless 环境：跳过本地uploads/temp目录创建与静态服务');
+}
 
 // 路由
 app.use('/api/orders', ordersRouter);
@@ -74,7 +89,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    database: 'connected'
+    database: (process.env.SUPABASE_URL ? 'supabase' : (isServerless ? 'unconfigured' : 'sqlite'))
   });
 });
 
@@ -101,9 +116,14 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: '接口不存在' });
 });
 
-app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`API文档: http://localhost:${PORT}/api/health`);
-});
+// 在本地环境启动监听；在Vercel Serverless中由平台处理请求
+if (!isServerless) {
+  app.listen(PORT, () => {
+    console.log(`服务器运行在端口 ${PORT}`);
+    console.log(`API文档: http://localhost:${PORT}/api/health`);
+  });
+} else {
+  console.log('Vercel Serverless 环境：导出 Express 应用，无需 app.listen');
+}
 
 export default app;

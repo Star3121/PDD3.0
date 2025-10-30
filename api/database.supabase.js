@@ -37,7 +37,7 @@ class SupabaseDatabase {
   // Helper method to ensure initialization
   async ensureInitialized() {
     if (!this.initialized) {
-      await this.initialize();
+      await this.init();
     }
   }
 
