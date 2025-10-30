@@ -7,6 +7,7 @@ import templatesRouter, { setDatabase as setTemplatesDatabase } from './routes/t
 import designsRouter, { setDatabase as setDesignsDatabase } from './routes/designs.js';
 import uploadRouter, { setDatabase as setUploadDatabase } from './routes/upload.js';
 import categoriesRouter, { setDatabase as setCategoriesDatabase } from './routes/categories.js';
+import filesRouter from './routes/files.js';
 import { Database } from './database.js';
 import { db as supabaseDb } from './database.supabase.js';
 
@@ -83,6 +84,7 @@ app.use('/api/templates', templatesRouter);
 app.use('/api/designs', designsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/files', filesRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

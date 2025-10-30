@@ -8,10 +8,17 @@ const router = express.Router();
 // 数据库实例将从服务器注入
 let db;
 
+// 检测是否在 Vercel 环境
+const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
+
 // 配置文件上传
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(process.cwd(), 'uploads/templates');
+    // 在 Vercel 环境使用 /tmp 目录，本地开发使用 uploads 目录
+    const uploadPath = isVercel 
+      ? '/tmp/templates'
+      : path.join(process.cwd(), 'uploads/templates');
+    
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
@@ -149,7 +156,10 @@ router.post('/', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: '请上传模板图片' });
     }
     
-    const imagePath = `/uploads/templates/${req.file.filename}`;
+    // 在 Vercel 环境中，文件存储在 /tmp，但返回相对路径用于前端访问
+    const imagePath = isVercel 
+      ? `/api/files/templates/${req.file.filename}`  // API 路由访问
+      : `/uploads/templates/${req.file.filename}`;   // 本地静态文件访问
     
     const result = await db.run(
       'INSERT INTO templates (name, image_path, category) VALUES (?, ?, ?)',

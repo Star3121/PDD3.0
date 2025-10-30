@@ -375,7 +375,11 @@ class SupabaseDatabase {
         
         let query = this.supabase.from(tableName).update(updates);
         conditions.forEach(condition => {
-          query = query.eq(condition.column, condition.value);
+          if (condition.type === 'in') {
+            query = query.in(condition.column, condition.values);
+          } else {
+            query = query.eq(condition.column, condition.value);
+          }
         });
         
         const { data, error } = await query.select();
@@ -394,7 +398,11 @@ class SupabaseDatabase {
         
         let query = this.supabase.from(tableName).delete();
         conditions.forEach(condition => {
-          query = query.eq(condition.column, condition.value);
+          if (condition.type === 'in') {
+            query = query.in(condition.column, condition.values);
+          } else {
+            query = query.eq(condition.column, condition.value);
+          }
         });
         
         const { data, error } = await query;
@@ -421,12 +429,26 @@ class SupabaseDatabase {
   // Helper method to parse WHERE clause
   parseWhereClause(whereClause, params) {
     const conditions = [];
+    
+    // Support IN (...) clause
+    const inMatch = whereClause.match(/(\w+)\s+in\s*\(([^)]+)\)/i);
+    if (inMatch) {
+      conditions.push({
+        type: 'in',
+        column: inMatch[1],
+        values: params
+      });
+      return conditions;
+    }
+    
+    // Fallback: support equality conditions combined with AND
     const parts = whereClause.split(/\s+and\s+/i);
     
     parts.forEach((part, index) => {
       const match = part.match(/(\w+)\s*=\s*\?/i);
       if (match) {
         conditions.push({
+          type: 'eq',
           column: match[1],
           value: params[index]
         });
