@@ -5,13 +5,18 @@ import fs from 'fs';
 
 const router = express.Router();
 
+// 检测是否在 Vercel 环境
+const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
+
 // 数据库实例将从服务器注入
 let db;
 
 // 配置图片上传
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(process.cwd(), 'uploads/designs');
+    const uploadPath = isVercel
+      ? '/tmp/designs'
+      : path.join(process.cwd(), 'uploads/designs');
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
@@ -71,21 +76,19 @@ router.get('/:id', async (req, res) => {
 router.post('/', upload.single('preview'), async (req, res) => {
   try {
     const { order_id, name, canvas_data, width, height, background_type } = req.body;
-    
     if (!order_id || !name) {
       return res.status(400).json({ error: '订单ID和设计名称不能为空' });
     }
-    
     let preview_path = null;
     if (req.file) {
-      preview_path = `/uploads/designs/${req.file.filename}`;
+      preview_path = isVercel
+        ? `/api/files/designs/${req.file.filename}`
+        : `/uploads/designs/${req.file.filename}`;
     }
-    
     const result = await db.run(
       'INSERT INTO designs (order_id, name, canvas_data, preview_path, width, height, background_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [order_id, name, canvas_data || '{}', preview_path, width || 800, height || 600, background_type || 'white']
     );
-    
     const newDesign = await db.query('SELECT * FROM designs WHERE id = ?', [result.id]);
     res.status(201).json(newDesign[0]);
   } catch (error) {
@@ -99,38 +102,34 @@ router.put('/:id', upload.single('preview'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, canvas_data, width, height, background_type } = req.body;
-    
-    // 获取现有设计
     const existingDesigns = await db.query('SELECT * FROM designs WHERE id = ?', [id]);
     if (existingDesigns.length === 0) {
       return res.status(404).json({ error: '设计不存在' });
     }
-    
     const existingDesign = existingDesigns[0];
-    
     let preview_path = existingDesign.preview_path;
-    
-    // 如果有新的预览图，删除旧的并保存新的
     if (req.file) {
       if (existingDesign.preview_path) {
-        const oldPreviewPath = path.join(process.cwd(), existingDesign.preview_path);
-        if (fs.existsSync(oldPreviewPath)) {
+        const oldFilename = path.basename(existingDesign.preview_path || '');
+        const oldPreviewPath = isVercel
+          ? path.join('/tmp/designs', oldFilename)
+          : path.join(process.cwd(), 'uploads/designs', oldFilename);
+        if (oldFilename && fs.existsSync(oldPreviewPath)) {
           fs.unlinkSync(oldPreviewPath);
         }
       }
-      preview_path = `/uploads/designs/${req.file.filename}`;
+      preview_path = isVercel
+        ? `/api/files/designs/${req.file.filename}`
+        : `/uploads/designs/${req.file.filename}`;
     }
-    
     // 生成东八区时间
     const beijingTime = new Date();
     beijingTime.setHours(beijingTime.getHours() + 8);
     const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
-    
     await db.run(
       'UPDATE designs SET name = ?, canvas_data = ?, preview_path = ?, width = ?, height = ?, background_type = ?, updated_at = ? WHERE id = ?',
       [name || existingDesign.name, canvas_data || existingDesign.canvas_data, preview_path, width || existingDesign.width, height || existingDesign.height, background_type || existingDesign.background_type, beijingTimeString, id]
     );
-    
     const updatedDesign = await db.query('SELECT * FROM designs WHERE id = ?', [id]);
     res.json(updatedDesign[0]);
   } catch (error) {
@@ -143,26 +142,21 @@ router.put('/:id', upload.single('preview'), async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // 获取设计信息
     const designs = await db.query('SELECT * FROM designs WHERE id = ?', [id]);
     if (designs.length === 0) {
       return res.status(404).json({ error: '设计不存在' });
     }
-    
     const design = designs[0];
-    
-    // 删除预览图文件
     if (design.preview_path) {
-      const previewPath = path.join(process.cwd(), design.preview_path);
-      if (fs.existsSync(previewPath)) {
+      const filename = path.basename(design.preview_path || '');
+      const previewPath = isVercel
+        ? path.join('/tmp/designs', filename)
+        : path.join(process.cwd(), 'uploads/designs', filename);
+      if (filename && fs.existsSync(previewPath)) {
         fs.unlinkSync(previewPath);
       }
     }
-    
-    // 删除数据库记录
     await db.run('DELETE FROM designs WHERE id = ?', [id]);
-    
     res.json({ message: '设计删除成功' });
   } catch (error) {
     console.error('删除设计失败:', error);

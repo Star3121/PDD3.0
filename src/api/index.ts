@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3002/api';
+const API_BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3001/api';
 
 // 基础请求函数
 async function request<T>(

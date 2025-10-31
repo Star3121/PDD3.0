@@ -119,8 +119,23 @@ export function buildImageUrl(imagePath: string): string {
   
   // 确保路径以/开头
   const path = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+
+  // 在生产环境将本地静态路径映射到可访问的API文件路径
+  let normalizedPath = path;
+  if (import.meta.env.PROD) {
+    if (path.startsWith('/uploads/templates/')) {
+      const filename = path.split('/').pop() || '';
+      normalizedPath = `/api/files/templates/${filename}`;
+    } else if (path.startsWith('/uploads/images/')) {
+      const filename = path.split('/').pop() || '';
+      normalizedPath = `/api/files/images/${filename}`;
+    } else if (path.startsWith('/uploads/designs/')) {
+      const filename = path.split('/').pop() || '';
+      normalizedPath = `/api/files/designs/${filename}`;
+    }
+  }
   
   // 使用环境变量或默认值构建完整URL
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3002');
-  return `${baseUrl}${path}`;
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
+  return `${baseUrl}${normalizedPath}`;
 }

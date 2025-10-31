@@ -19,12 +19,28 @@
   "routes": [
     { "handle": "filesystem" },
     {
+      "src": "/api/files/(.*)",
+      "dest": "/api/index.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Cross-Origin-Resource-Policy": "cross-origin"
+      }
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/index.js"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/api/index.js",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Cross-Origin-Resource-Policy": "cross-origin"
+      }
     },
     {
       "src": "/",
@@ -34,11 +50,5 @@
       "src": "/(.*)",
       "dest": "/dist/$1"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "SUPABASE_URL": "https://oojmmjkdncekibfnwwmr.supabase.co",
-    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vam1tamtkbmNla2liZm53d21yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4MDY3MDEsImV4cCI6MjA3NzM4MjcwMX0.8Lmj1tgrOSuYvp18mffZLEcpW5KMy-9c3JmrRqCGMls",
-    "SUPABASE_SERVICE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vam1tamtkbmNla2liZm53d21yIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTgwNjcwMSwiZXhwIjoyMDc3MzgyNzAxfQ.N5r59O2JmZZ9rkmGdAvKUfQpV57MvGwoS3tUOTtZ94I"
-  }
+  ]
 }

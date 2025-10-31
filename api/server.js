@@ -8,7 +8,6 @@ import designsRouter, { setDatabase as setDesignsDatabase } from './routes/desig
 import uploadRouter, { setDatabase as setUploadDatabase } from './routes/upload.js';
 import categoriesRouter, { setDatabase as setCategoriesDatabase } from './routes/categories.js';
 import filesRouter from './routes/files.js';
-import { Database } from './database.js';
 import { db as supabaseDb } from './database.supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,13 +33,19 @@ try {
         run: async () => { throw new Error('Serverless环境未配置数据库，请在Vercel设置Supabase环境变量'); }
       };
     } else {
-      db = new Database();
+      // 动态导入SQLite数据库，仅在非Serverless环境使用
+      const mod = await import('./database.js');
+      db = new mod.Database();
       console.log('使用SQLite数据库');
     }
   }
 } catch (error) {
   console.error('数据库初始化失败，使用SQLite:', error);
-  db = new Database();
+  // 仅在非Serverless环境作为兜底使用SQLite
+  if (!isServerless) {
+    const mod = await import('./database.js');
+    db = new mod.Database();
+  }
 }
 
 // 将数据库实例注入到所有路由模块
@@ -57,6 +62,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // 确保必要的目录存在与静态文件服务（仅在非Serverless环境）
 import fs from 'fs';
+// 静态文件服务配置
 if (!isServerless) {
   const dirs = [
     path.join(process.cwd(), 'uploads'),
@@ -72,8 +78,11 @@ if (!isServerless) {
     }
   });
 
-  // 静态文件服务
+  // 提供上传文件的静态服务
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  
+  // 提供前端静态文件服务
+  app.use(express.static(path.join(process.cwd(), 'dist')));
 } else {
   console.log('Vercel Serverless 环境：跳过本地uploads/temp目录创建与静态服务');
 }
@@ -91,32 +100,35 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    database: (process.env.SUPABASE_URL ? 'supabase' : (isServerless ? 'unconfigured' : 'sqlite'))
+    database: process.env.SUPABASE_URL ? 'supabase' : 'sqlite'
   });
 });
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
-  console.error('错误:', err);
-  if (err && err.name === 'MulterError') {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: '文件过大', message: '单个文件不超过10MB' });
-    }
-    return res.status(400).json({ error: '上传错误', message: err.message });
-  }
-  if (err && err.message === '只能上传图片文件') {
-    return res.status(400).json({ error: '类型错误', message: '只能上传图片文件' });
-  }
+  console.error('服务器错误:', err);
   res.status(500).json({ 
     error: '服务器内部错误',
     message: err?.message || '未知错误' 
   });
 });
 
-// 404处理
-app.use('*', (req, res) => {
-  res.status(404).json({ error: '接口不存在' });
-});
+// SPA 路由处理 - 对于非 API 路由，返回 index.html
+if (!isServerless) {
+  app.get('*', (req, res) => {
+    // 如果是 API 路由但没有匹配到，返回 404
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: '接口不存在' });
+    }
+    // 否则返回前端应用的 index.html
+    res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+  });
+} else {
+  // Vercel 环境下的 404 处理
+  app.use('*', (req, res) => {
+    res.status(404).json({ error: '接口不存在' });
+  });
+}
 
 // 在本地环境启动监听；在Vercel Serverless中由平台处理请求
 if (!isServerless) {

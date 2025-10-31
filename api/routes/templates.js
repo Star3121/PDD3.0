@@ -2,8 +2,14 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { promises as fsPromises } from 'fs';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
+
+// 获取当前文件的目录路径（ES模块兼容）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 数据库实例将从服务器注入
 let db;
@@ -256,41 +262,42 @@ router.delete('/', async (req, res) => {
     const { ids } = req.body;
     
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: '请提供要删除的模板ID列表' });
+      return res.status(400).json({ error: '请提供要删除的模板ID数组' });
     }
 
-    // 获取要删除的模板信息
-    const placeholders = ids.map(() => '?').join(',');
-    const templates = await db.query(
-      `SELECT * FROM templates WHERE id IN (${placeholders})`,
-      ids
-    );
+    // 过滤无效的ID
+    const validIds = ids.filter(id => id != null && !isNaN(id));
+    
+    if (validIds.length === 0) {
+      return res.status(400).json({ error: '没有有效的模板ID' });
+    }
 
+    // 查询要删除的模板信息
+    const templates = await db.query('SELECT * FROM templates WHERE id IN (?)', validIds);
+    
     if (templates.length === 0) {
       return res.status(404).json({ error: '未找到要删除的模板' });
     }
 
-    // 删除文件
+    // 删除关联的文件
     for (const template of templates) {
-      const fullPath = path.join(process.cwd(), template.image_path);
-      if (fs.existsSync(fullPath)) {
+      if (template.image_path) {
+        const imagePath = path.join(__dirname, '..', template.image_path);
         try {
-          fs.unlinkSync(fullPath);
-        } catch (fileError) {
-          console.warn(`删除文件失败: ${fullPath}`, fileError);
+          await fsPromises.unlink(imagePath);
+        } catch (error) {
+          console.log(`删除图片文件失败: ${imagePath}`, error.message);
         }
       }
     }
 
-    // 从数据库批量删除
-    await db.run(
-      `DELETE FROM templates WHERE id IN (${placeholders})`,
-      ids
-    );
+    // 删除数据库记录
+    await db.query('DELETE FROM templates WHERE id IN (?)', validIds);
 
     res.json({ 
-      message: `成功删除 ${templates.length} 个模板`,
-      deletedCount: templates.length 
+      message: '批量删除成功',
+      deletedCount: templates.length,
+      deletedIds: templates.map(t => t.id)
     });
   } catch (error) {
     console.error('批量删除模板失败:', error);

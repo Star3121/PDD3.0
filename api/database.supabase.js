@@ -14,24 +14,14 @@ class SupabaseDatabase {
     const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Supabase URL and Key must be provided in environment variables');
+      console.error('Supabase URL 和 Key 需要在环境变量中提供');
       return;
     }
 
+    // 轻量初始化：仅创建客户端，不进行探测查询，避免冷启动阻塞
     this.supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Test connection
-    try {
-      const { data, error } = await this.supabase.from('categories').select('id').limit(1);
-      if (error && error.code !== 'PGRST116') { // PGRST116 = table doesn't exist
-        console.error(`Failed to connect to Supabase: ${error.message}`);
-        return;
-      }
-      this.initialized = true;
-      console.log('Supabase数据库连接成功');
-    } catch (err) {
-      console.error('Supabase连接失败:', err);
-    }
+    this.initialized = true;
+    console.log('Supabase 客户端初始化完成');
   }
 
   // Helper method to ensure initialization
@@ -292,6 +282,11 @@ class SupabaseDatabase {
         let whereClause = '';
         let orderBy = '';
         let limit = '';
+        let selectClause = '';
+        
+        // Extract SELECT clause
+        const selectMatch = sql.match(/select\s+(.+?)\s+from/i);
+        if (selectMatch) selectClause = selectMatch[1].trim();
         
         // Extract table name
         const fromMatch = sql.match(/from\s+(\w+)/i);
@@ -310,29 +305,46 @@ class SupabaseDatabase {
         if (limitMatch) limit = limitMatch[1];
         
         // Build Supabase query
-        let query = this.supabase.from(tableName).select('*');
+        let query;
+        
+        // Handle COUNT(*) queries
+        if (selectClause.toLowerCase().includes('count(*)')) {
+          query = this.supabase.from(tableName).select('*', { count: 'exact', head: true });
+        } else {
+          query = this.supabase.from(tableName).select(selectClause === '*' ? '*' : selectClause);
+        }
         
         // Apply WHERE conditions
         if (whereClause) {
           const conditions = this.parseWhereClause(whereClause, params);
           conditions.forEach(condition => {
-            query = query.eq(condition.column, condition.value);
+            if (condition.type === 'in') {
+              query = query.in(condition.column, condition.values);
+            } else {
+              query = query.eq(condition.column, condition.value);
+            }
           });
         }
         
-        // Apply ORDER BY
-        if (orderBy) {
+        // Apply ORDER BY (only for non-count queries)
+        if (orderBy && !selectClause.toLowerCase().includes('count(*)')) {
           const [column, direction] = orderBy.trim().split(/\s+/);
           query = query.order(column, { ascending: direction?.toLowerCase() !== 'desc' });
         }
         
-        // Apply LIMIT
-        if (limit) {
+        // Apply LIMIT (only for non-count queries)
+        if (limit && !selectClause.toLowerCase().includes('count(*)')) {
           query = query.limit(parseInt(limit));
         }
         
-        const { data, error } = await query;
+        const { data, error, count } = await query;
         if (error) throw error;
+        
+        // Handle COUNT(*) results
+        if (selectClause.toLowerCase().includes('count(*)')) {
+          return [{ total: count || 0 }];
+        }
+        
         return data || [];
         
       } else if (lowerSql.startsWith('insert')) {
@@ -364,14 +376,14 @@ class SupabaseDatabase {
       } else if (lowerSql.startsWith('update')) {
         // Handle UPDATE queries
         const tableMatch = sql.match(/update\s+(\w+)/i);
-        const setMatch = sql.match(/set\s+(.+?)\s+where/i);
-        const whereMatch = sql.match(/where\s+(.+)$/i);
+        const setMatch = sql.match(/set\s+([\s\S]+?)\s+where/i);
+        const whereMatch = sql.match(/where\s+([\s\S]+)$/i);
         
         if (!tableMatch || !setMatch || !whereMatch) throw new Error('无法解析UPDATE语句');
         
         const tableName = tableMatch[1];
-        const updates = this.parseSetClause(setMatch[1], params);
-        const conditions = this.parseWhereClause(whereMatch[1], params.slice(updates.length));
+        const { updates, paramCount } = this.parseSetClause(setMatch[1], params);
+        const conditions = this.parseWhereClause(whereMatch[1], params.slice(paramCount));
         
         let query = this.supabase.from(tableName).update(updates);
         conditions.forEach(condition => {
@@ -433,10 +445,15 @@ class SupabaseDatabase {
     // Support IN (...) clause
     const inMatch = whereClause.match(/(\w+)\s+in\s*\(([^)]+)\)/i);
     if (inMatch) {
+      // Filter out undefined values and ensure all values are valid
+      const validValues = params.filter(value => value !== undefined && value !== null);
+      if (validValues.length === 0) {
+        throw new Error('IN子句中没有有效的值');
+      }
       conditions.push({
         type: 'in',
         column: inMatch[1],
-        values: params
+        values: validValues
       });
       return conditions;
     }
@@ -446,7 +463,7 @@ class SupabaseDatabase {
     
     parts.forEach((part, index) => {
       const match = part.match(/(\w+)\s*=\s*\?/i);
-      if (match) {
+      if (match && params[index] !== undefined && params[index] !== null) {
         conditions.push({
           type: 'eq',
           column: match[1],
@@ -461,16 +478,21 @@ class SupabaseDatabase {
   // Helper method to parse SET clause
   parseSetClause(setClause, params) {
     const updates = {};
-    const parts = setClause.split(',');
+    // 清理换行符和多余空格，然后按逗号分割
+    const cleanSetClause = setClause.replace(/\s+/g, ' ').trim();
+    const parts = cleanSetClause.split(',').map(part => part.trim());
+    let paramIndex = 0;
     
-    parts.forEach((part, index) => {
+    parts.forEach((part) => {
       const match = part.match(/(\w+)\s*=\s*\?/i);
       if (match) {
-        updates[match[1]] = params[index];
+        const fieldName = match[1];
+        updates[fieldName] = params[paramIndex];
+        paramIndex++;
       }
     });
     
-    return updates;
+    return { updates, paramCount: paramIndex };
   }
 
   // Close connection (for cleanup)
