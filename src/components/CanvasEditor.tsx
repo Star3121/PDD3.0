@@ -141,6 +141,7 @@ export interface CanvasEditorProps {
   onSelectionChange?: (object: fabric.Object | null) => void;
   onEditModeChange?: (mode: EditMode, target: fabric.Object | null) => void;
   onObjectCountChange?: (count: number) => void;
+  onChange?: () => void;
 }
 
 // CanvasEditor 引用接口
@@ -335,7 +336,32 @@ const CanvasEditor = forwardRef<CanvasEditorRef, CanvasEditorProps>((props, ref)
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      canvas.dispose();
+      
+      // 安全地清理Canvas
+      try {
+        if (canvas && typeof canvas.dispose === 'function') {
+          // 先清理事件监听器
+          cleanupCanvas();
+          
+          // 清理Canvas上下文
+          const canvasElement = canvas.getElement();
+          if (canvasElement) {
+            const ctx = canvasElement.getContext('2d');
+            if (ctx && typeof ctx.clearRect === 'function') {
+              try {
+                ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+              } catch (error) {
+                console.warn('[CanvasEditor] Canvas context clearRect failed:', error);
+              }
+            }
+          }
+          
+          // 最后dispose Canvas
+          canvas.dispose();
+        }
+      } catch (error) {
+        console.warn('[CanvasEditor] Canvas cleanup failed:', error);
+      }
     };
   }, [responsiveSize]);
 
@@ -2045,6 +2071,9 @@ const rebuildFrameImagePairs = () => {
 
     const state = canvasInstance.current.toJSON();
     historyManagerRef.current.push(state);
+    
+    // 通知外部变化
+    props.onChange?.();
   };
 
   // 防抖版本的保存状态函数，避免频繁保存

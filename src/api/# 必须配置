@@ -1,0 +1,5 @@
+# 必须配置
+VITE_DOUBAO_API_KEY=36853cc4-7b45-4e1f-a94a-08534f96bde6
+
+# 可选配置（如果需要指定特定模型）
+VITE_DOUBAO_MODEL=

@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { templatesAPI, categoriesAPI } from '../api';
 import { Template, PaginatedResponse, Category } from '../api';
 import Pagination from './Pagination';
-import { buildImageUrl } from '../lib/utils';
+import { buildImageUrl, buildThumbnailUrl } from '../lib/utils';
+
+const fetcher = (url: string) => fetch(url).then(res => {
+  if (!res.ok) throw new Error('Failed to fetch');
+  return res.json();
+});
 
 interface TemplateLibraryProps {
   onTemplateSelect: (template: Template) => void;
@@ -38,10 +44,29 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   const [editingTemplateCategory, setEditingTemplateCategory] = useState('');
   const [totalPages, setTotalPages] = useState(1);
 
+  // 获取静态数据（优先使用）
+  const { data: staticData } = useSWR('/data/templates.json', fetcher, {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+    onError: () => console.log('Static data not found, falling back to API')
+  });
+
   useEffect(() => {
     fetchTemplates();
-    fetchCategories();
+    if (!staticData) {
+        fetchCategories();
+    }
   }, []);
+
+  // 监听 staticData 变化
+  useEffect(() => {
+    if (staticData) {
+        fetchTemplates();
+        if (staticData.categories) {
+            setCategories(staticData.categories);
+        }
+    }
+  }, [staticData]);
 
   // 监听分页参数变化
   useEffect(() => {
@@ -51,6 +76,29 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   const fetchTemplates = async () => {
     try {
       setLoading(true);
+
+      // 优先使用静态数据进行客户端筛选
+      if (staticData && staticData.templates) {
+        let result = staticData.templates;
+        
+        // 筛选
+        if (searchQuery.trim()) {
+            const lowerQuery = searchQuery.trim().toLowerCase();
+            result = result.filter((t: Template) => t.name.toLowerCase().includes(lowerQuery));
+        }
+        if (selectedCategory !== 'all') {
+            result = result.filter((t: Template) => t.category === selectedCategory);
+        }
+        
+        // 分页
+        setTotal(result.length);
+        setTotalPages(Math.ceil(result.length / pageSize));
+        const start = (currentPage - 1) * pageSize;
+        setTemplates(result.slice(start, start + pageSize));
+        setLoading(false);
+        return;
+      }
+
       const params = {
         page: currentPage,
         pageSize,
@@ -497,7 +545,10 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
               </div>
               
               <img
-                src={buildImageUrl(template.image_path)}
+                src={buildThumbnailUrl(template.image_path, 'thumb')}
+                onError={(e) => {
+                  e.currentTarget.src = buildImageUrl(template.image_path);
+                }}
                 alt={template.name}
                 className="w-full h-2/3 object-cover cursor-pointer"
                 onClick={() => onTemplateSelect(template)}

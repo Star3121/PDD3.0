@@ -144,6 +144,105 @@ router.get('/', async (req, res) => {
   }
 });
 
+// 获取订单统计信息
+router.get('/stats', async (req, res) => {
+  try {
+    const { customStartDate, customEndDate } = req.query;
+
+    // 1. 基础状态统计 (mark 分组)
+    const statusQuery = 'SELECT mark, COUNT(*) as count FROM orders GROUP BY mark';
+    const statusResults = await db.query(statusQuery);
+    
+    // 初始化统计对象
+    const stats = {
+      total: 0,
+      pending_design: 0,
+      pending_confirm: 0,
+      confirmed: 0,
+      exported: 0,
+      exportedToday: 0,
+      exportedYesterday: 0,
+      exportedCustom: 0
+    };
+
+    // 填充基础状态统计
+    statusResults.forEach(row => {
+      stats.total += row.count;
+      if (stats.hasOwnProperty(row.mark)) {
+        stats[row.mark] = row.count;
+      }
+    });
+
+    // 2. 导出时间统计 (今天、昨天、自定义)
+    // 系统已经是东八区时间，直接使用
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // 转换为数据库时间格式（东八区）
+    const formatToDbTime = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+
+    const todayStr = formatToDbTime(today);
+    const tomorrowStr = formatToDbTime(tomorrow);
+    const yesterdayStr = formatToDbTime(yesterday);
+
+    // 查询今天和昨天的导出数量
+    const timeStatsQuery = `
+      SELECT 
+        SUM(CASE WHEN exported_at >= ? AND exported_at < ? THEN 1 ELSE 0 END) as today_count,
+        SUM(CASE WHEN exported_at >= ? AND exported_at < ? THEN 1 ELSE 0 END) as yesterday_count
+      FROM orders 
+      WHERE mark = 'exported'
+    `;
+    
+    const timeStatsResult = await db.query(timeStatsQuery, [todayStr, tomorrowStr, yesterdayStr, todayStr]);
+    if (timeStatsResult.length > 0) {
+      stats.exportedToday = timeStatsResult[0].today_count || 0;
+      stats.exportedYesterday = timeStatsResult[0].yesterday_count || 0;
+    }
+
+    // 3. 自定义时间范围统计 (如果有参数)
+    if (customStartDate && customEndDate) {
+      const startDate = new Date(customStartDate);
+      const endDate = new Date(customEndDate);
+      endDate.setHours(23, 59, 59, 999); // 包含结束日期的整天
+
+      const customStatsQuery = `
+        SELECT COUNT(*) as count 
+        FROM orders 
+        WHERE mark = 'exported' 
+        AND exported_at >= ? 
+        AND exported_at <= ?
+      `;
+      
+      const customStatsResult = await db.query(customStatsQuery, [
+        formatToDbTime(startDate),
+        formatToDbTime(endDate)
+      ]);
+      
+      if (customStatsResult.length > 0) {
+        stats.exportedCustom = customStatsResult[0].count || 0;
+      }
+    }
+
+    res.json(stats);
+  } catch (error) {
+    console.error('获取统计信息失败:', error);
+    res.status(500).json({ error: '获取统计信息失败' });
+  }
+});
+
 // 检查订单号是否存在
 router.get('/check/:orderNumber', async (req, res) => {
   try {

@@ -37,6 +37,11 @@ dist-ssr
 database.sqlite
 uploads/
 api/uploads/
+database.db
 
 # Vercel local project files
 .vercel/
+
+# Large binaries
+node-v18.19.0-darwin-arm64/
+node-v18.19.0-darwin-arm64.tar.gz

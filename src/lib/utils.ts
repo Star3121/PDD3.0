@@ -120,8 +120,18 @@ export function buildImageUrl(imagePath: string): string {
   // 确保路径以/开头
   const path = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
 
-  // 在生产环境将本地静态路径映射到可访问的API文件路径
+  // 获取配置的 API Base URL
+  // 开发环境通常是 http://localhost:3001/api
+  // 生产环境可能是 /api 或空字符串
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001/api');
+  
+  // 计算 Origin (去除末尾的 /api)
+  // http://localhost:3001/api -> http://localhost:3001
+  const apiOrigin = apiBaseUrl.replace(/\/api\/?$/, '');
+
   let normalizedPath = path;
+
+  // 在生产环境将本地静态路径映射到可访问的API文件路径
   if (import.meta.env.PROD) {
     if (path.startsWith('/uploads/templates/')) {
       const filename = path.split('/').pop() || '';
@@ -134,8 +144,27 @@ export function buildImageUrl(imagePath: string): string {
       normalizedPath = `/api/files/designs/${filename}`;
     }
   }
+
+  // 如果路径已经是 /api 开头，而 apiBaseUrl 也包含 /api，则使用 apiOrigin 避免重复
+  if (normalizedPath.startsWith('/api/') && apiBaseUrl.endsWith('/api')) {
+    return `${apiOrigin}${normalizedPath}`;
+  }
   
-  // 使用环境变量或默认值构建完整URL
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:3001');
-  return `${baseUrl}${normalizedPath}`;
+  // 如果路径是 /uploads 开头（开发环境静态文件），应该直接挂载在 Origin 下
+  if (normalizedPath.startsWith('/uploads/')) {
+    return `${apiOrigin}${normalizedPath}`;
+  }
+
+  // 其他情况直接拼接
+  return `${apiBaseUrl}${normalizedPath}`;
+}
+
+// 构建缩略图URL
+export function buildThumbnailUrl(imagePath: string, size: 'thumb' | 'medium' = 'thumb'): string {
+  const fullUrl = buildImageUrl(imagePath);
+  // Insert prefix before filename
+  const parts = fullUrl.split('/');
+  const filename = parts.pop();
+  if (!filename) return fullUrl;
+  return parts.join('/') + '/' + size + '_' + filename;
 }

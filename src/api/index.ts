@@ -142,6 +142,13 @@ export const ordersAPI = {
       method: 'PATCH',
       body: JSON.stringify({ orderIds, exportStatus }),
     }),
+  getStats: (customStartDate?: string, customEndDate?: string) => {
+    const searchParams = new URLSearchParams();
+    if (customStartDate) searchParams.append('customStartDate', customStartDate);
+    if (customEndDate) searchParams.append('customEndDate', customEndDate);
+    const queryString = searchParams.toString();
+    return request<OrderStats>(`/orders/stats${queryString ? `?${queryString}` : ''}`);
+  },
 };
 
 // 模板相关API
@@ -293,6 +300,17 @@ export interface UpdateOrderData {
   order_notes?: string;
   mark?: 'pending_design' | 'pending_confirm' | 'confirmed' | 'exported';
   export_status?: 'not_exported' | 'exported';
+}
+
+export interface OrderStats {
+  total: number;
+  pending_design: number;
+  pending_confirm: number;
+  confirmed: number;
+  exported: number;
+  exportedToday: number;
+  exportedYesterday: number;
+  exportedCustom: number;
 }
 
 export interface Template {

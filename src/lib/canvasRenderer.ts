@@ -142,8 +142,25 @@ export async function renderCanvasToHighResImage(
               fabricCanvas.renderAll();
             });
             
-            // 清理资源
-            fabricCanvas.dispose();
+            // 安全地清理资源
+            try {
+              if (fabricCanvas && typeof fabricCanvas.dispose === 'function') {
+                const canvasElement = fabricCanvas.getElement();
+                if (canvasElement) {
+                  const ctx = canvasElement.getContext('2d');
+                  if (ctx && typeof ctx.clearRect === 'function') {
+                    try {
+                      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    } catch (error) {
+                      console.warn('[CanvasRenderer] Canvas context clearRect failed:', error);
+                    }
+                  }
+                }
+                fabricCanvas.dispose();
+              }
+            } catch (error) {
+              console.warn('[CanvasRenderer] Canvas cleanup failed:', error);
+            }
             
             resolve(dataUrl);
           } else {
@@ -162,8 +179,25 @@ export async function renderCanvasToHighResImage(
             // 导出为dataURL
             const dataUrl = fabricCanvas.toDataURL(exportOptions);
             
-            // 清理资源
-            fabricCanvas.dispose();
+            // 安全地清理资源
+            try {
+              if (fabricCanvas && typeof fabricCanvas.dispose === 'function') {
+                const canvasElement = fabricCanvas.getElement();
+                if (canvasElement) {
+                  const ctx = canvasElement.getContext('2d');
+                  if (ctx && typeof ctx.clearRect === 'function') {
+                    try {
+                      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    } catch (error) {
+                      console.warn('[CanvasRenderer] Canvas context clearRect failed:', error);
+                    }
+                  }
+                }
+                fabricCanvas.dispose();
+              }
+            } catch (error) {
+              console.warn('[CanvasRenderer] Canvas cleanup failed:', error);
+            }
             
             resolve(dataUrl);
           }
@@ -195,7 +229,14 @@ export async function renderCanvasToHighResImage(
             tempCtx.fillText('设计预览', tempCanvas.width / 2, tempCanvas.height / 2 - 20);
             tempCtx.fillText('(包含外部图片，无法完整导出)', tempCanvas.width / 2, tempCanvas.height / 2 + 20);
             
-            fabricCanvas.dispose();
+            // 安全地清理资源
+            try {
+              if (fabricCanvas && typeof fabricCanvas.dispose === 'function') {
+                fabricCanvas.dispose();
+              }
+            } catch (error) {
+              console.warn('[CanvasRenderer] Canvas cleanup failed in fallback:', error);
+            }
             resolve(tempCanvas.toDataURL('image/png'));
           } catch (fallbackError) {
             console.error('[CanvasRenderer] 备用导出方案也失败:', fallbackError);
@@ -218,10 +259,24 @@ export async function renderCanvasToHighResImage(
               placeholderCtx.textAlign = 'center';
               placeholderCtx.fillText('无法导出设计预览', 200, 150);
               
-              fabricCanvas.dispose();
+              // 安全地清理资源
+              try {
+                if (fabricCanvas && typeof fabricCanvas.dispose === 'function') {
+                  fabricCanvas.dispose();
+                }
+              } catch (error) {
+                console.warn('[CanvasRenderer] Canvas cleanup failed in placeholder:', error);
+              }
               resolve(placeholderCanvas.toDataURL('image/png'));
             } else {
-              fabricCanvas.dispose();
+              // 安全地清理资源
+              try {
+                if (fabricCanvas && typeof fabricCanvas.dispose === 'function') {
+                  fabricCanvas.dispose();
+                }
+              } catch (error) {
+                console.warn('[CanvasRenderer] Canvas cleanup failed in placeholder error:', error);
+              }
               reject(new Error('无法创建占位图'));
             }
           }

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import OrderList from './pages/OrderList';
 import CreateOrder from './pages/CreateOrder';
 import DesignEditor from './pages/DesignEditor';
+import DesignPreview from './pages/DesignPreview';
 import TemplateLibraryPage from './pages/TemplateLibraryPage';
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
           <Route path="/" element={<OrderList />} />
           <Route path="/orders/new" element={<CreateOrder />} />
           <Route path="/design/:orderId" element={<DesignEditor />} />
+          <Route path="/preview/:orderId" element={<DesignPreview />} />
           <Route path="/templates" element={<TemplateLibraryPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

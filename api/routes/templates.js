@@ -2,14 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { promises as fsPromises } from 'fs';
-import { fileURLToPath } from 'url';
+import storageService from '../services/storage.js';
 
 const router = express.Router();
-
-// 获取当前文件的目录路径（ES模块兼容）
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // 数据库实例将从服务器注入
 let db;
@@ -162,10 +157,11 @@ router.post('/', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: '请上传模板图片' });
     }
     
-    // 在 Vercel 环境中，文件存储在 /tmp，但返回相对路径用于前端访问
-    const imagePath = isVercel 
-      ? `/api/files/templates/${req.file.filename}`  // API 路由访问
-      : `/uploads/templates/${req.file.filename}`;   // 本地静态文件访问
+    // 上传到存储服务（自动处理多级缩略图 + 适配 S3/Supabase/Local）
+    await storageService.uploadProcessedImage('templates', req.file.filename, req.file.path, req.file.mimetype);
+    
+    // 统一使用 /api/files 路径
+    const imagePath = `/api/files/templates/${req.file.filename}`;
     
     const result = await db.run(
       'INSERT INTO templates (name, image_path, category) VALUES (?, ?, ?)',
@@ -242,9 +238,13 @@ router.delete('/:id', async (req, res) => {
     const template = templates[0];
     
     // 删除文件
-    const fullPath = path.join(process.cwd(), template.image_path);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
+    if (template.image_path) {
+      const filename = path.basename(template.image_path);
+      try {
+        await storageService.deleteFile('templates', filename);
+      } catch (e) {
+        console.error('删除模板图片失败:', e);
+      }
     }
 
     // 从数据库删除
@@ -282,11 +282,11 @@ router.delete('/', async (req, res) => {
     // 删除关联的文件
     for (const template of templates) {
       if (template.image_path) {
-        const imagePath = path.join(__dirname, '..', template.image_path);
+        const filename = path.basename(template.image_path);
         try {
-          await fsPromises.unlink(imagePath);
+          await storageService.deleteFile('templates', filename);
         } catch (error) {
-          console.log(`删除图片文件失败: ${imagePath}`, error.message);
+          console.log(`删除图片文件失败: ${filename}`, error.message);
         }
       }
     }

@@ -75,7 +75,7 @@ ${orderText}
 3. productSpecs：只提取尺寸数据（如"150x200cm"），不包含材质/颜色等
 4. transactionTime：转成 YYYY-MM-DDTHH:mm 格式
 5. quantity：必须是数字类型
-6. recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"（保留中括号数字）
+6. recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"。特别注意：如果姓名后紧跟或换行后有“[数字]”（如[1234]），请务必将其包含在姓名中，例如"姓名：王天戈[2931]"
 7. 如果某字段找不到，设为空字符串
 
 请返回以下JSON格式，只返回JSON，不要附加文字：
@@ -137,7 +137,7 @@ ${orderText}
    - productSpecs：只提取尺寸数据，不包含材质/颜色等
    - transactionTime：转成 YYYY-MM-DDTHH:mm 格式
    - quantity：必须是数字类型
-   - recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"
+   - recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"。特别注意：如果姓名后紧跟或换行后有“[数字]”（如[1234]），请务必将其包含在姓名中，例如"姓名：王天戈[2931]"
 
 请返回JSON数组格式，只返回JSON，不要附加文字：
 [
@@ -194,7 +194,7 @@ ${orderText}
 3. productSpecs：只提取尺寸数据（如"150x200cm"），不包含材质/颜色等
 4. transactionTime：转成 YYYY-MM-DDTHH:mm 格式
 5. quantity：必须是数字类型
-6. recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"（保留中括号数字）
+6. recipientInfo：规范输出为"姓名：xxx | 电话：xxx | 地址：xxx"。特别注意：如果姓名后紧跟或换行后有“[数字]”（如[1234]），请务必将其包含在姓名中，例如"姓名：王天戈[2931]"
 7. 如果某字段找不到，设为空字符串
 
 请返回以下JSON格式，只返回JSON，不要附加文字：

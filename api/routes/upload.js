@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
+import storageService from '../services/storage.js';
 
 const router = express.Router();
 
@@ -44,7 +45,7 @@ const upload = multer({
 });
 
 // 上传图片（兼容字段名 'image' 与 'file'）
-router.post('/image', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), (req, res) => {
+router.post('/image', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'file', maxCount: 1 }]), async (req, res) => {
   try {
     const files = req.files || {};
     const imageFile = (Array.isArray(files?.image) && files.image[0]) || (Array.isArray(files?.file) && files.file[0]);
@@ -53,10 +54,11 @@ router.post('/image', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'fi
       return res.status(400).json({ error: '请上传图片文件' });
     }
 
-    // 在 Vercel 环境中，文件存储在 /tmp，但返回相对路径用于前端访问
-    const imagePath = isVercel 
-      ? `/api/files/images/${imageFile.filename}`  // API 路由访问
-      : `/uploads/images/${imageFile.filename}`;   // 本地静态文件访问
+    // 上传到存储服务（自动处理多级缩略图 + 适配 S3/Supabase/Local）
+    await storageService.uploadProcessedImage('images', imageFile.filename, imageFile.path, imageFile.mimetype);
+
+    // 统一使用 /api/files 路径
+    const imagePath = `/api/files/images/${imageFile.filename}`;
     
     res.json({ 
       message: '图片上传成功',

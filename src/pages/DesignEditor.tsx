@@ -19,6 +19,45 @@ const DesignEditor: React.FC = () => {
   const [objectCount, setObjectCount] = useState(0);
   const [backgroundType, setBackgroundType] = useState<'transparent' | 'white'>('transparent');
   const canvasRef = useRef<CanvasEditorRef>(null);
+  const currentDesignRef = useRef<Design | null>(null);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    currentDesignRef.current = currentDesign;
+  }, [currentDesign]);
+
+  // 自动保存逻辑
+  const handleAutoSave = async () => {
+    if (!canvasRef.current || !currentDesignRef.current) return;
+    
+    try {
+      const canvasData = canvasRef.current.getCanvasData();
+      // 使用轻量级更新接口（不生成预览图）
+      await designsAPI.update(currentDesignRef.current.id, {
+        canvas_data: canvasData,
+        name: currentDesignRef.current.name,
+        width: currentDesignRef.current.width,
+        height: currentDesignRef.current.height,
+        background_type: backgroundType
+      });
+      console.log('自动保存成功');
+    } catch (error) {
+      console.error('自动保存失败:', error);
+    }
+  };
+
+  const onCanvasChange = () => {
+    // 只有当已有设计ID时才自动保存（新设计需手动保存一次）
+    if (!currentDesignRef.current) return;
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    debounceTimer.current = setTimeout(() => {
+      handleAutoSave();
+    }, 1000);
+  };
 
   useEffect(() => {
     loadOrderData();
@@ -385,6 +424,7 @@ const DesignEditor: React.FC = () => {
               onSelectionChange={handleSelectionChange}
               onEditModeChange={handleEditModeChange}
               onObjectCountChange={handleObjectCountChange}
+              onChange={onCanvasChange}
             />
           </div>
       </div>

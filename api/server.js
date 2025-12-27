@@ -56,7 +56,12 @@ setUploadDatabase(db);
 setCategoriesDatabase(db);
 
 // 中间件
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -78,6 +83,37 @@ if (!isServerless) {
     }
   });
 
+  // 自定义静态文件处理中间件
+  app.use('/uploads', (req, res, next) => {
+    // 设置CORS头
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    const filePath = path.join(process.cwd(), 'uploads', req.path);
+    
+    // 检查文件是否存在
+    if (fs.existsSync(filePath)) {
+      // 设置正确的Content-Type
+      if (req.path.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (req.path.endsWith('.jpg') || req.path.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (req.path.endsWith('.gif')) {
+        res.setHeader('Content-Type', 'image/gif');
+      } else if (req.path.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      }
+      next();
+    } else {
+      // 文件不存在，返回透明的1x1像素PNG
+      res.setHeader('Content-Type', 'image/png');
+      const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      res.send(transparentPng);
+    }
+  });
+  
   // 提供上传文件的静态服务
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   

@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import storageService from '../services/storage.js';
 
 const router = express.Router();
 
@@ -81,9 +82,11 @@ router.post('/', upload.single('preview'), async (req, res) => {
     }
     let preview_path = null;
     if (req.file) {
-      preview_path = isVercel
-        ? `/api/files/designs/${req.file.filename}`
-        : `/uploads/designs/${req.file.filename}`;
+      // 上传到存储服务（自动处理多级缩略图 + 适配 S3/Supabase/Local）
+      await storageService.uploadProcessedImage('designs', req.file.filename, req.file.path, req.file.mimetype);
+      
+      // 统一使用 /api/files 路径，由后端决定是重定向还是直接返回
+      preview_path = `/api/files/designs/${req.file.filename}`;
     }
     const result = await db.run(
       'INSERT INTO designs (order_id, name, canvas_data, preview_path, width, height, background_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -111,16 +114,19 @@ router.put('/:id', upload.single('preview'), async (req, res) => {
     if (req.file) {
       if (existingDesign.preview_path) {
         const oldFilename = path.basename(existingDesign.preview_path || '');
-        const oldPreviewPath = isVercel
-          ? path.join('/tmp/designs', oldFilename)
-          : path.join(process.cwd(), 'uploads/designs', oldFilename);
-        if (oldFilename && fs.existsSync(oldPreviewPath)) {
-          fs.unlinkSync(oldPreviewPath);
+        if (oldFilename) {
+          try {
+            await storageService.deleteFile('designs', oldFilename);
+          } catch (e) {
+            console.error('删除旧设计预览图失败:', e);
+          }
         }
       }
-      preview_path = isVercel
-        ? `/api/files/designs/${req.file.filename}`
-        : `/uploads/designs/${req.file.filename}`;
+      
+      // 上传到存储服务（自动处理多级缩略图 + 适配 S3/Supabase/Local）
+      await storageService.uploadProcessedImage('designs', req.file.filename, req.file.path, req.file.mimetype);
+      
+      preview_path = `/api/files/designs/${req.file.filename}`;
     }
     // 生成东八区时间
     const beijingTime = new Date();
@@ -149,11 +155,12 @@ router.delete('/:id', async (req, res) => {
     const design = designs[0];
     if (design.preview_path) {
       const filename = path.basename(design.preview_path || '');
-      const previewPath = isVercel
-        ? path.join('/tmp/designs', filename)
-        : path.join(process.cwd(), 'uploads/designs', filename);
-      if (filename && fs.existsSync(previewPath)) {
-        fs.unlinkSync(previewPath);
+      if (filename) {
+        try {
+          await storageService.deleteFile('designs', filename);
+        } catch (e) {
+          console.error('删除设计预览图失败:', e);
+        }
       }
     }
     await db.run('DELETE FROM designs WHERE id = ?', [id]);

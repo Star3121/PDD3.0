@@ -33,7 +33,7 @@ const OrderList: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
-  const [allOrdersForCounting, setAllOrdersForCounting] = useState<Order[]>([]);
+  // const [allOrdersForCounting, setAllOrdersForCounting] = useState<Order[]>([]);
   const [designPreviews, setDesignPreviews] = useState<Record<number, string>>({});
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -104,39 +104,16 @@ const OrderList: React.FC = () => {
     return date >= startDate && date <= endDate;
   };
 
-  const markCounts = useMemo(() => {
-    const counts = { 
-      total: allOrdersForCounting.length, 
-      pending_design: 0, 
-      pending_confirm: 0, 
-      confirmed: 0, 
-      exported: 0,
-      exportedToday: 0,
-      exportedYesterday: 0,
-      exportedCustom: 0
-    };
-    
-    allOrdersForCounting.forEach(order => {
-      const mark = order.mark || 'pending_design';
-      if (mark in counts) {
-        counts[mark as keyof typeof counts]++;
-      }
-      
-      // 计算已导出订单的时间分类
-      if (mark === 'exported' && order.exported_at) {
-        if (isToday(order.exported_at)) {
-          counts.exportedToday++;
-        }
-        if (isYesterday(order.exported_at)) {
-          counts.exportedYesterday++;
-        }
-        if (isInCustomRange(order.exported_at)) {
-          counts.exportedCustom++;
-        }
-      }
-    });
-    return counts;
-  }, [allOrdersForCounting, customDateRange]);
+  const [markCounts, setMarkCounts] = useState({
+    total: 0,
+    pending_design: 0,
+    pending_confirm: 0,
+    confirmed: 0,
+    exported: 0,
+    exportedToday: 0,
+    exportedYesterday: 0,
+    exportedCustom: 0
+  });
 
   // 现在过滤在后端进行，orders 就是当前页的过滤结果
   const filteredOrders = orders;
@@ -158,25 +135,18 @@ const OrderList: React.FC = () => {
   useEffect(() => {
     // 获取全量数据用于统计
     fetchAllOrdersForCounting();
-  }, []);
+  }, [customDateRange]); // 添加 customDateRange 依赖，当时间范围变化时重新获取统计
 
 
 
   const fetchAllOrdersForCounting = async () => {
     try {
-      // 获取所有订单用于统计，不影响分页显示
-      const response = await ordersAPI.getAll({ 
-        page: 1, 
-        pageSize: 1000, // 减少页面大小，避免获取过多数据
-        search: '', // 不应用搜索过滤
-        mark: '' // 不应用状态过滤
-      });
-      
-      if ('data' in response) {
-        setAllOrdersForCounting(response.data);
-      } else {
-        setAllOrdersForCounting(response);
-      }
+      // 使用新的统计API
+      const stats = await ordersAPI.getStats(
+        customDateRange.startDate,
+        customDateRange.endDate
+      );
+      setMarkCounts(stats);
     } catch (error) {
       console.error('获取订单统计数据失败:', error);
     }
@@ -1120,6 +1090,12 @@ const OrderList: React.FC = () => {
                     className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 shadow-sm transition-colors duration-200 font-medium"
                   >
                     设计
+                  </button>
+                  <button
+                    onClick={() => navigate(`/preview/${order.id}`)}
+                    className="flex-1 px-2 py-1 text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-md hover:bg-purple-100 shadow-sm transition-colors duration-200 font-medium"
+                  >
+                    预览
                   </button>
                   <button
                     onClick={() => handleEditOrder(order)}
