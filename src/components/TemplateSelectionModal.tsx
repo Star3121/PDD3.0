@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { templatesAPI, categoriesAPI } from '../api';
-import { Template, Category } from '../api/index';
-import { buildImageUrl } from '../lib/utils';
+import { Template } from '../api/index';
+import { buildImageUrl, buildThumbnailUrl } from '../lib/utils';
+import { useTemplates } from '../hooks/useTemplates';
 
 interface TemplateSelectionModalProps {
   isOpen: boolean;
@@ -14,70 +14,32 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
   onClose,
   onTemplateSelect
 }) => {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
-  const fetchCategories = async () => {
-    try {
-      const response = await categoriesAPI.getAll();
-      setCategories(response);
-    } catch (error) {
-      console.error('获取分类失败:', error);
-    }
-  };
+  // 搜索防抖
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const { templates, categories, loading, totalPages } = useTemplates({
+    page: currentPage,
+    pageSize: 24,
+    search: debouncedSearch,
+    category: selectedCategory,
+    enabled: isOpen
+  });
 
   const getCategoryDisplayName = (categoryName: string) => {
     const category = categories.find(cat => cat.name === categoryName);
     return category ? category.display_name : categoryName;
   };
-
-  const fetchTemplates = async () => {
-    if (!isOpen) return;
-    
-    setLoading(true);
-    try {
-      const params: any = {
-        page: currentPage,
-        limit: 24, // 每页显示24个模板 (6列 x 4行)
-      };
-
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim();
-      }
-
-      if (selectedCategory !== 'all') {
-        params.category = selectedCategory;
-      }
-
-      const response = await templatesAPI.getAll(params);
-      
-      // 处理可能的分页响应或直接数组响应
-      if (Array.isArray(response)) {
-        setTemplates(response);
-        setTotalPages(1);
-      } else {
-        setTemplates(response.data || []);
-        setTotalPages(response.pagination?.totalPages || 1);
-      }
-    } catch (error) {
-      console.error('获取模板失败:', error);
-      setTemplates([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchCategories();
-      fetchTemplates();
-    }
-  }, [isOpen, currentPage, searchQuery, selectedCategory]);
 
   const handleTemplateClick = (template: Template) => {
     onTemplateSelect(template);
@@ -161,9 +123,12 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
                 >
                   <div className="aspect-square overflow-hidden rounded-t-lg">
                     <img
-                      src={buildImageUrl(template.image_path)}
+                      src={buildThumbnailUrl(template.image_path, 'thumb')}
                       alt={template.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = buildImageUrl(template.image_path);
+                      }}
                     />
                   </div>
                   <div className="p-2">

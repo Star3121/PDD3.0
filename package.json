@@ -9,7 +9,7 @@
     "build": "tsc && vite build",
     "build:vercel": "npm run build",
     "build:static": "node scripts/generate-static-data.js",
-    "vercel-build": "npm run build && npm run build:static",
+    "vercel-build": "npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "server": "node api/server.js"

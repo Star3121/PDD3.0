@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { templatesAPI, categoriesAPI } from '../api';
-import { Template, Category } from '../api/index';
+import { Template } from '../api/index';
 import TemplateSelectionModal from './TemplateSelectionModal';
 import CategoryTemplatesModal from './CategoryTemplatesModal';
-import { buildImageUrl } from '../lib/utils';
+import { buildImageUrl, buildThumbnailUrl } from '../lib/utils';
+import { useTemplates } from '../hooks/useTemplates';
 
 interface CanvasTemplateLibraryProps {
   onTemplateSelect: (template: Template) => void;
@@ -14,77 +14,32 @@ const CanvasTemplateLibrary: React.FC<CanvasTemplateLibraryProps> = ({
   onTemplateSelect,
   onOpenFullLibrary
 }) => {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMoreModalOpen, setIsMoreModalOpen] = useState(false);
 
-  const fetchCategories = async () => {
-    try {
-      const response = await categoriesAPI.getAll();
-      setCategories(response);
-    } catch (error) {
-      console.error('获取分类失败:', error);
-    }
-  };
+  // 搜索防抖
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const { templates, categories, loading } = useTemplates({
+    page: 1,
+    pageSize: 7,
+    search: debouncedSearch,
+    category: selectedCategory
+  });
 
   const getCategoryDisplayName = (categoryName: string) => {
     if (categoryName === 'all') return '全部';
     const category = categories.find(cat => cat.name === categoryName);
     return category ? category.display_name : categoryName;
-  };
-
-  useEffect(() => {
-    fetchCategories();
-    fetchTemplates();
-  }, [selectedCategory]);
-
-  // 搜索防抖
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchTemplates(true); // 传入参数表示这是搜索触发的请求
-    }, 300); // 300ms 防抖延迟
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
-
-  const fetchTemplates = async (isSearch = false) => {
-    try {
-      if (isSearch) {
-        setSearching(true);
-      } else {
-        setLoading(true);
-      }
-      const params: any = {
-        page: 1,
-        pageSize: 7, // 只显示7个模板，第8个位置留给"更多"按钮
-        category: selectedCategory === 'all' ? undefined : selectedCategory,
-      };
-
-      // 添加搜索参数
-      if (searchQuery.trim()) {
-        params.search = searchQuery.trim();
-      }
-      
-      const response = await templatesAPI.getAll(params);
-      
-      // 处理可能的分页响应或直接数组响应
-      if (Array.isArray(response)) {
-        setTemplates(response);
-      } else {
-        setTemplates(response.data || []);
-      }
-    } catch (error) {
-      console.error('获取模板失败:', error);
-      setTemplates([]);
-    } finally {
-      setLoading(false);
-      setSearching(false);
-    }
   };
 
   const handleCategoryChange = (category: string) => {
@@ -130,7 +85,7 @@ const CanvasTemplateLibrary: React.FC<CanvasTemplateLibraryProps> = ({
             className="w-full px-3 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            {searching ? (
+            {loading ? (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
             ) : (
               <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +163,7 @@ const CanvasTemplateLibrary: React.FC<CanvasTemplateLibraryProps> = ({
           )}
         </div>
       ) : (
-        <div className={`relative grid grid-cols-4 gap-3 max-h-80 overflow-y-auto ${searching ? 'opacity-60 pointer-events-none' : ''}`}>
+        <div className={`relative grid grid-cols-4 gap-3 max-h-80 overflow-y-auto ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
           {templates.map(template => (
             <div
               key={template.id}
@@ -218,10 +173,13 @@ const CanvasTemplateLibrary: React.FC<CanvasTemplateLibraryProps> = ({
               {/* 模板图片 */}
               <div className="aspect-square bg-gray-50 overflow-hidden">
                 <img
-                  src={buildImageUrl(template.image_path)}
+                  src={buildThumbnailUrl(template.image_path, 'thumb')}
                   alt={template.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.src = buildImageUrl(template.image_path);
+                  }}
                 />
               </div>
               

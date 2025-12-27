@@ -1,25 +1,39 @@
 {
   "templates": [
     {
-      "id": 18,
-      "name": "10",
-      "image_path": "/uploads/templates/1761808785245-10.png",
+      "id": 25,
+      "name": "2",
+      "image_path": "/api/files/templates/1766768165818-2.png",
       "category": "default",
-      "created_at": "2025-10-30 07:19:45"
+      "created_at": "2025-12-26 16:56:06"
     },
     {
-      "id": 17,
-      "name": "4",
-      "image_path": "/uploads/templates/1761808776517-4.png",
+      "id": 24,
+      "name": "微信图片_2025-11-02_140906_080",
+      "image_path": "/api/files/templates/1766766226409-å¾®ä¿¡å¾ç_2025-11-02_140906_080.png",
       "category": "default",
-      "created_at": "2025-10-30 07:19:36"
+      "created_at": "2025-12-26 16:23:46"
     },
     {
-      "id": 16,
-      "name": "01+默认规格",
-      "image_path": "/uploads/templates/1761807816329-01+é»è®¤è§æ ¼.png",
+      "id": 23,
+      "name": "3",
+      "image_path": "/api/files/templates/1766765970190-3.png",
       "category": "default",
-      "created_at": "2025-10-30 07:03:36"
+      "created_at": "2025-12-26 16:19:30"
+    },
+    {
+      "id": 22,
+      "name": "35",
+      "image_path": "/api/files/templates/1766764982052-35.png",
+      "category": "default",
+      "created_at": "2025-12-26 16:03:02"
+    },
+    {
+      "id": 19,
+      "name": "221312",
+      "image_path": "/api/files/templates/1766764204553-1.png",
+      "category": "default",
+      "created_at": "2025-12-26 15:50:04"
     }
   ],
   "categories": [
@@ -74,5 +88,5 @@
       "updated_at": "2025-10-28 07:01:56"
     }
   ],
-  "generatedAt": "2025-12-26T15:39:08.180Z"
+  "generatedAt": "2025-12-27T08:02:47.335Z"
 }
