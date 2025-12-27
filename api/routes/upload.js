@@ -114,12 +114,18 @@ router.get('/export/:orderId', async (req, res) => {
     
     // 复制设计预览图
     for (const design of designs) {
-      if (design.preview_path && fs.existsSync(path.join(process.cwd(), design.preview_path))) {
+      if (design.preview_path) {
         const fileName = path.basename(design.preview_path);
-        fs.copyFileSync(
-          path.join(process.cwd(), design.preview_path),
-          path.join(tempDir, fileName)
-        );
+        try {
+          await storageService.downloadFile(
+            'designs',
+            fileName,
+            path.join(tempDir, fileName)
+          );
+        } catch (error) {
+          console.error(`导出时下载设计图失败 [${fileName}]:`, error);
+          // 继续执行，不中断导出，但可能导致导出的文件夹中缺少该图片
+        }
       }
     }
     
@@ -209,12 +215,17 @@ router.post('/export/batch', async (req, res) => {
       
       // 复制设计预览图
       for (const design of designs) {
-        if (design.preview_path && fs.existsSync(path.join(process.cwd(), design.preview_path))) {
+        if (design.preview_path) {
           const fileName = path.basename(design.preview_path);
-          fs.copyFileSync(
-            path.join(process.cwd(), design.preview_path),
-            path.join(orderDir, fileName)
-          );
+          try {
+            await storageService.downloadFile(
+              'designs',
+              fileName,
+              path.join(orderDir, fileName)
+            );
+          } catch (error) {
+            console.error(`批量导出时下载设计图失败 [${fileName}]:`, error);
+          }
         }
       }
     }

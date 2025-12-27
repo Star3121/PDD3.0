@@ -34,10 +34,9 @@ dist-ssr
 .env.production
 
 # Local database and uploads
-database.sqlite
+*.sqlite
+*.db
 uploads/
-api/uploads/
-database.db
 
 # Vercel local project files
 .vercel/

@@ -14,7 +14,9 @@ export class Database {
   }
 
   init() {
-    const dbPath = path.join(process.cwd(), 'database.sqlite');
+    // 允许通过环境变量指定数据库文件名，默认为 database.sqlite
+    const dbName = process.env.DB_NAME || 'database.sqlite';
+    const dbPath = path.join(process.cwd(), dbName);
     
     // 确保数据库目录存在
     const dbDir = path.dirname(dbPath);
