@@ -112,9 +112,9 @@ router.get('/', async (req, res) => {
       SELECT * FROM orders 
       ${whereClause} 
       ORDER BY ${validSortBy} ${validSortOrder} 
-      LIMIT ? OFFSET ?
+      LIMIT ${pageSizeNum} OFFSET ${offset}
     `;
-    const orders = await db.query(dataQuery, [...queryParams, pageSizeNum, offset]);
+    const orders = await db.query(dataQuery, queryParams);
 
     // 计算分页信息
     const totalPages = Math.ceil(total / pageSizeNum);

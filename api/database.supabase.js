@@ -304,6 +304,11 @@ class SupabaseDatabase {
         const limitMatch = sql.match(/limit\s+(\d+)/i);
         if (limitMatch) limit = limitMatch[1];
         
+        // Extract OFFSET
+        let offset = 0;
+        const offsetMatch = sql.match(/offset\s+(\d+)/i);
+        if (offsetMatch) offset = parseInt(offsetMatch[1]);
+        
         // Build Supabase query
         let query;
         
@@ -332,9 +337,12 @@ class SupabaseDatabase {
           query = query.order(column, { ascending: direction?.toLowerCase() !== 'desc' });
         }
         
-        // Apply LIMIT (only for non-count queries)
+        // Apply Pagination (LIMIT & OFFSET) (only for non-count queries)
         if (limit && !selectClause.toLowerCase().includes('count(*)')) {
-          query = query.limit(parseInt(limit));
+          const limitNum = parseInt(limit);
+          const from = offset;
+          const to = offset + limitNum - 1;
+          query = query.range(from, to);
         }
         
         const { data, error, count } = await query;
