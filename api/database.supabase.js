@@ -323,10 +323,28 @@ class SupabaseDatabase {
         if (whereClause) {
           const conditions = this.parseWhereClause(whereClause, params);
           conditions.forEach(condition => {
-            if (condition.type === 'in') {
-              query = query.in(condition.column, condition.values);
-            } else {
-              query = query.eq(condition.column, condition.value);
+            switch (condition.type) {
+              case 'or':
+                query = query.or(condition.filter);
+                break;
+              case 'in':
+                query = query.in(condition.column, condition.values);
+                break;
+              case 'eq':
+                query = query.eq(condition.column, condition.value);
+                break;
+              case 'gte':
+                query = query.gte(condition.column, condition.value);
+                break;
+              case 'lte':
+                query = query.lte(condition.column, condition.value);
+                break;
+              case 'gt':
+                query = query.gt(condition.column, condition.value);
+                break;
+              case 'lt':
+                query = query.lt(condition.column, condition.value);
+                break;
             }
           });
         }
