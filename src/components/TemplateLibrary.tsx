@@ -1,14 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import useSWR from 'swr';
 import { templatesAPI, categoriesAPI } from '../api';
 import { Template, PaginatedResponse, Category } from '../api';
 import Pagination from './Pagination';
 import { buildImageUrl, buildThumbnailUrl } from '../lib/utils';
-
-const fetcher = (url: string) => fetch(url).then(res => {
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-});
 
 interface TemplateLibraryProps {
   onTemplateSelect: (template: Template) => void;
@@ -23,6 +17,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   const [loading, setLoading] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -40,69 +35,29 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDisplayName, setNewCategoryDisplayName] = useState('');
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+  const [editingField, setEditingField] = useState<'name' | 'category' | null>(null);
   const [editingTemplateName, setEditingTemplateName] = useState('');
   const [editingTemplateCategory, setEditingTemplateCategory] = useState('');
   const [totalPages, setTotalPages] = useState(1);
 
-  // 获取静态数据（优先使用）
-  const { data: staticData } = useSWR('/data/templates.json', fetcher, {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-    onError: () => console.log('Static data not found, falling back to API')
-  });
-
   useEffect(() => {
     fetchTemplates();
-    if (!staticData) {
-        fetchCategories();
-    }
+    fetchCategories();
   }, []);
-
-  // 监听 staticData 变化
-  useEffect(() => {
-    if (staticData) {
-        fetchTemplates();
-        if (staticData.categories) {
-            setCategories(staticData.categories);
-        }
-    }
-  }, [staticData]);
 
   // 监听分页参数变化
   useEffect(() => {
     fetchTemplates();
-  }, [currentPage, pageSize, searchQuery, selectedCategory]);
+  }, [currentPage, pageSize, activeSearchQuery, selectedCategory]);
 
   const fetchTemplates = async () => {
     try {
       setLoading(true);
 
-      // 优先使用静态数据进行客户端筛选
-      if (staticData && staticData.templates) {
-        let result = staticData.templates;
-        
-        // 筛选
-        if (searchQuery.trim()) {
-            const lowerQuery = searchQuery.trim().toLowerCase();
-            result = result.filter((t: Template) => t.name.toLowerCase().includes(lowerQuery));
-        }
-        if (selectedCategory !== 'all') {
-            result = result.filter((t: Template) => t.category === selectedCategory);
-        }
-        
-        // 分页
-        setTotal(result.length);
-        setTotalPages(Math.ceil(result.length / pageSize));
-        const start = (currentPage - 1) * pageSize;
-        setTemplates(result.slice(start, start + pageSize));
-        setLoading(false);
-        return;
-      }
-
       const params = {
         page: currentPage,
         pageSize,
-        search: searchQuery.trim(),
+        search: activeSearchQuery.trim(),
         category: selectedCategory === 'all' ? undefined : selectedCategory,
       };
       
@@ -204,6 +159,10 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   // 搜索处理函数
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
+  };
+
+  const handleSearch = () => {
+    setActiveSearchQuery(searchQuery);
     setCurrentPage(1); // 重置到第一页
     setSelectedTemplates(new Set()); // 清空选择
   };
@@ -355,29 +314,37 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   };
 
   // 模板编辑功能
-  const startEditTemplate = (template: Template) => {
+  const startEditTemplate = (template: Template, field: 'name' | 'category') => {
     setEditingTemplateId(template.id);
+    setEditingField(field);
     setEditingTemplateName(template.name);
     setEditingTemplateCategory(template.category);
   };
 
-  const handleUpdateTemplate = async () => {
-    if (!editingTemplateId || !editingTemplateName.trim()) {
+  const handleUpdateTemplate = async (updates?: { name?: string; category?: string }) => {
+    if (!editingTemplateId) return;
+    
+    const nameToUpdate = updates?.name ?? editingTemplateName.trim();
+    // 如果没有提供 name 更新且当前 input 为空，则提示
+    if (!nameToUpdate) {
       alert('请输入模板名称');
       return;
     }
 
+    const categoryToUpdate = updates?.category ?? editingTemplateCategory;
+
     try {
       await templatesAPI.update(editingTemplateId, {
-        name: editingTemplateName.trim(),
-        category: editingTemplateCategory
+        name: nameToUpdate,
+        category: categoryToUpdate
       });
       
       setEditingTemplateId(null);
+      setEditingField(null);
       setEditingTemplateName('');
       setEditingTemplateCategory('');
       fetchTemplates();
-      alert('模板更新成功');
+      // alert('模板更新成功'); // 移除 alert 以优化体验
     } catch (error) {
       console.error('更新模板失败:', error);
       alert('更新模板失败，请稍后重试');
@@ -386,6 +353,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
 
   const cancelEditTemplate = () => {
     setEditingTemplateId(null);
+    setEditingField(null);
     setEditingTemplateName('');
     setEditingTemplateCategory('');
   };
@@ -406,13 +374,22 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-gray-800">模板库</h3>
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="搜索模板名称"
-            className="w-48 px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="搜索模板名称"
+              className="w-48 px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+            <button
+              onClick={handleSearch}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded text-sm flex items-center gap-1"
+            >
+              搜索
+            </button>
+          </div>
           {filteredTemplates.length > 0 && (
             <button
               onClick={handleSelectAll}
@@ -556,36 +533,63 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
               <div className="p-2 h-1/3 flex flex-col justify-between">
                 {editingTemplateId === template.id ? (
                   <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={editingTemplateName}
-                      onChange={(e) => setEditingTemplateName(e.target.value)}
-                      className="w-full text-sm border border-gray-300 rounded px-1 py-0.5"
-                      onBlur={handleUpdateTemplate}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleUpdateTemplate();
-                        if (e.key === 'Escape') cancelEditTemplate();
-                      }}
-                      autoFocus
-                    />
-                    <select
-                      value={editingTemplateCategory}
-                      onChange={(e) => setEditingTemplateCategory(e.target.value)}
-                      className="w-full text-xs border border-gray-300 rounded px-1 py-0.5"
-                    >
-                      {categories.map(category => (
-                        <option key={category.id} value={category.name}>
-                          {category.display_name}
-                        </option>
-                      ))}
-                    </select>
+                    {editingField === 'name' && (
+                      <input
+                        type="text"
+                        value={editingTemplateName}
+                        onChange={(e) => setEditingTemplateName(e.target.value)}
+                        className="w-full text-sm border border-gray-300 rounded px-1 py-0.5"
+                        onBlur={() => handleUpdateTemplate()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleUpdateTemplate();
+                          if (e.key === 'Escape') cancelEditTemplate();
+                        }}
+                        autoFocus
+                      />
+                    )}
+                    {editingField === 'category' && (
+                      <select
+                        value={editingTemplateCategory}
+                        onChange={(e) => {
+                          const newCategory = e.target.value;
+                          setEditingTemplateCategory(newCategory);
+                          handleUpdateTemplate({ category: newCategory });
+                        }}
+                        onBlur={() => {
+                          // 给一点延迟，防止 onChange 先触发了保存，onBlur 又触发取消导致闪烁或逻辑冲突
+                          // 但实际上 handleUpdateTemplate 会清除 ID，所以 onBlur 即使触发也无妨，只要不覆盖即可
+                          // 简单起见，如果正在保存中（虽然这里没有 loading 状态），或者直接关闭
+                          setTimeout(() => {
+                             if (editingTemplateId === template.id) {
+                               cancelEditTemplate();
+                             }
+                          }, 200);
+                        }}
+                        className="w-full text-xs border border-gray-300 rounded px-1 py-0.5"
+                        autoFocus
+                      >
+                        {categories.map(category => (
+                          <option key={category.id} value={category.name}>
+                            {category.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 ) : (
-                  <div onDoubleClick={() => startEditTemplate(template)}>
-                    <p className="text-sm font-medium text-gray-900 truncate" title={template.name}>
+                  <div className="flex flex-col h-full justify-between">
+                    <p 
+                      className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600 hover:bg-gray-50 rounded px-1 -mx-1 transition-colors" 
+                      title={template.name}
+                      onDoubleClick={() => startEditTemplate(template, 'name')}
+                    >
                       {template.name}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p 
+                      className="text-xs text-gray-500 cursor-pointer hover:text-blue-600 hover:bg-gray-50 rounded px-1 -mx-1 transition-colors"
+                      onDoubleClick={() => startEditTemplate(template, 'category')}
+                      title="双击修改分类"
+                    >
                       {getCategoryDisplayName(template.category)}
                     </p>
                   </div>

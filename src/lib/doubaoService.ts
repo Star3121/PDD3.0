@@ -36,6 +36,23 @@ class DoubaoService {
     return true;
   }
 
+  // 规范化产品类别
+  private normalizeProductCategory(category: string): string {
+    if (!category) return '';
+    const allowedCategories = ['抱枕', '法兰毯', '羊羔绒', '挂布', '地毯', '杯子', '抱枕被'];
+    const trimmed = category.trim();
+    if (allowedCategories.includes(trimmed)) {
+      return trimmed;
+    }
+    // 尝试模糊匹配（如果包含关键词）
+    for (const allowed of allowedCategories) {
+      if (trimmed.includes(allowed)) {
+        return allowed;
+      }
+    }
+    return ''; // 如果都不匹配，返回空字符串，让用户手动选择
+  }
+
   // 调用豆包API的通用方法
   private async callDoubaoAPI(messages: any[]): Promise<string> {
     this.checkApiKey();
@@ -70,7 +87,7 @@ class DoubaoService {
 ${orderText}
 
 重要识别规则：
-1. productCategory：从产品标题提取类型关键词（如"毛毯/抱枕/地毯/杯子/靠垫/床单/被套/枕套/窗帘/桌布/坐垫/毛巾/浴巾/围裙/手机壳/鼠标垫/帆布包/T恤/卫衣/马克杯"等），特殊规则：毛毯材质+毛毯（如"法兰绒毛毯"）
+1. productCategory：只识别以下几个产品类别：抱枕、法兰毯、羊羔绒、挂布、地毯、杯子、抱枕被。必须严格匹配这几个词之一。
 2. productModel：提取尺寸数据前同一行的中文描述（如"晚安宝贝"、"多头款【黄色背景】"），只要中文部分不包含尺寸
 3. productSpecs：只提取尺寸数据（如"150x200cm"），不包含材质/颜色等
 4. transactionTime：转成 YYYY-MM-DDTHH:mm 格式
@@ -113,6 +130,9 @@ ${orderText}
         parsedResult.quantity = parseInt(parsedResult.quantity) || 0;
       }
       
+      // 规范化产品类别
+      parsedResult.productCategory = this.normalizeProductCategory(parsedResult.productCategory);
+
       return parsedResult as OrderRecognitionResult;
     } catch (error) {
       throw new Error(`解析识别结果失败: ${error instanceof Error ? error.message : '未知错误'}`);
@@ -132,7 +152,7 @@ ${orderText}
 3. recipientInfo 保留中括号数字
 4. 确保识别出所有可能订单，即便不完整
 5. 字段规则与单订单相同：
-   - productCategory：从产品标题提取类型关键词（如"毛毯/抱枕/地毯/杯子/靠垫/床单/被套/枕套/窗帘/桌布/坐垫/毛巾/浴巾/围裙/手机壳/鼠标垫/帆布包/T恤/卫衣/马克杯"等），特殊规则：毛毯材质+毛毯（如"法兰绒毛毯"）
+   - productCategory：只识别以下几个产品类别：抱枕、法兰毯、羊羔绒、挂布、地毯、杯子、抱枕被。必须严格匹配这几个词之一。
    - productModel：提取尺寸数据前同一行的中文描述，只要中文部分不包含尺寸
    - productSpecs：只提取尺寸数据，不包含材质/颜色等
    - transactionTime：转成 YYYY-MM-DDTHH:mm 格式
@@ -174,7 +194,8 @@ ${orderText}
       // 确保每个订单的quantity是数字类型
       return parsedResult.map((order: any) => ({
         ...order,
-        quantity: typeof order.quantity === 'string' ? parseInt(order.quantity) || 0 : order.quantity
+        quantity: typeof order.quantity === 'string' ? parseInt(order.quantity) || 0 : order.quantity,
+        productCategory: this.normalizeProductCategory(order.productCategory)
       })) as OrderRecognitionResult[];
     } catch (error) {
       throw new Error(`解析识别结果失败: ${error instanceof Error ? error.message : '未知错误'}`);
@@ -189,7 +210,7 @@ ${orderText}
     const prompt = `请仔细分析这张订单图片，并按照固定的JSON格式返回订单信息：
 
 重要识别规则：
-1. productCategory：从产品标题提取类型关键词（如"毛毯/抱枕/地毯/杯子/靠垫/床单/被套/枕套/窗帘/桌布/坐垫/毛巾/浴巾/围裙/手机壳/鼠标垫/帆布包/T恤/卫衣/马克杯"等），特殊规则：毛毯材质+毛毯（如"法兰绒毛毯"）
+1. productCategory：只识别以下几个产品类别：抱枕、法兰毯、羊羔绒、挂布、地毯、杯子、抱枕被。必须严格匹配这几个词之一。
 2. productModel：提取尺寸数据前同一行的中文描述（如"晚安宝贝"、"多头款【黄色背景】"），只要中文部分不包含尺寸
 3. productSpecs：只提取尺寸数据（如"150x200cm"），不包含材质/颜色等
 4. transactionTime：转成 YYYY-MM-DDTHH:mm 格式
@@ -243,6 +264,9 @@ ${orderText}
         parsedResult.quantity = parseInt(parsedResult.quantity) || 0;
       }
       
+      // 规范化产品类别
+      parsedResult.productCategory = this.normalizeProductCategory(parsedResult.productCategory);
+
       return parsedResult as OrderRecognitionResult;
     } catch (error) {
       throw new Error(`解析识别结果失败: ${error instanceof Error ? error.message : '未知错误'}`);

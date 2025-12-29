@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -59,7 +60,7 @@ setCategoriesDatabase(db);
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -105,17 +106,26 @@ if (!isServerless) {
       } else if (req.path.endsWith('.svg')) {
         res.setHeader('Content-Type', 'image/svg+xml');
       }
+      
+      // 添加缓存控制头：缓存1年
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      
       next();
     } else {
       // 文件不存在，返回透明的1x1像素PNG
       res.setHeader('Content-Type', 'image/png');
+      // 404 图片不缓存，或者只缓存很短时间
+      res.setHeader('Cache-Control', 'no-cache');
       const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
       res.send(transparentPng);
     }
   });
   
   // 提供上传文件的静态服务
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+    maxAge: '1y', // 1年缓存
+    immutable: true
+  }));
   
   // 提供前端静态文件服务
   app.use(express.static(path.join(process.cwd(), 'dist')));

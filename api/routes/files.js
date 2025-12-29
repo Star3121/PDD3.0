@@ -26,7 +26,10 @@ const handleFileRequest = async (req, res, bucket, errorMessage) => {
     const access = await storageService.getFileAccess(bucket, filename);
 
     if (!access) {
-      return res.status(404).json({ error: '文件不存在' });
+      // 返回占位图代替 404 JSON，防止 ORB 错误
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send('<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#f0f0f0"/><text x="50%" y="50%" font-family="Arial" font-size="14" fill="#999" text-anchor="middle" dy=".3em">Image Not Found</text></svg>');
     }
 
     // 策略 1: 重定向到对象存储 (Supabase/S3)
@@ -62,7 +65,10 @@ const handleFileRequest = async (req, res, bucket, errorMessage) => {
     }
   } catch (error) {
     console.error(`${errorMessage}:`, error);
-    res.status(500).json({ error: errorMessage });
+    // 出错时也返回占位图
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send('<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#f0f0f0"/><text x="50%" y="50%" font-family="Arial" font-size="14" fill="#999" text-anchor="middle" dy=".3em">Error Loading Image</text></svg>');
   }
 };
 

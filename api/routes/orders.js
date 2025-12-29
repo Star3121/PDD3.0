@@ -150,8 +150,8 @@ router.get('/stats', async (req, res) => {
     const { customStartDate, customEndDate } = req.query;
 
     // 1. 基础状态统计 (mark 分组)
-    const statusQuery = 'SELECT mark, COUNT(*) as count FROM orders GROUP BY mark';
-    const statusResults = await db.query(statusQuery);
+    // 使用多次查询代替GROUP BY，以确保Supabase适配器兼容性
+    const marks = ['pending_design', 'pending_confirm', 'confirmed', 'exported'];
     
     // 初始化统计对象
     const stats = {
@@ -165,13 +165,14 @@ router.get('/stats', async (req, res) => {
       exportedCustom: 0
     };
 
-    // 填充基础状态统计
-    statusResults.forEach(row => {
-      stats.total += row.count;
-      if (stats.hasOwnProperty(row.mark)) {
-        stats[row.mark] = row.count;
-      }
-    });
+    // 并行执行所有状态的计数查询
+    await Promise.all(marks.map(async (mark) => {
+      // SupabaseDatabase.query 处理 COUNT(*) 时返回 [{ total: count }]
+      const result = await db.query('SELECT COUNT(*) as count FROM orders WHERE mark = ?', [mark]);
+      const count = result[0]?.total || 0;
+      stats[mark] = count;
+      stats.total += count;
+    }));
 
     // 2. 导出时间统计 (今天、昨天、自定义)
     // 系统已经是东八区时间，直接使用
@@ -197,20 +198,19 @@ router.get('/stats', async (req, res) => {
     const tomorrowStr = formatToDbTime(tomorrow);
     const yesterdayStr = formatToDbTime(yesterday);
 
-    // 查询今天和昨天的导出数量
-    const timeStatsQuery = `
-      SELECT 
-        SUM(CASE WHEN exported_at >= ? AND exported_at < ? THEN 1 ELSE 0 END) as today_count,
-        SUM(CASE WHEN exported_at >= ? AND exported_at < ? THEN 1 ELSE 0 END) as yesterday_count
-      FROM orders 
-      WHERE mark = 'exported'
-    `;
-    
-    const timeStatsResult = await db.query(timeStatsQuery, [todayStr, tomorrowStr, yesterdayStr, todayStr]);
-    if (timeStatsResult.length > 0) {
-      stats.exportedToday = timeStatsResult[0].today_count || 0;
-      stats.exportedYesterday = timeStatsResult[0].yesterday_count || 0;
-    }
+    // 查询今天导出数量
+    const todayResult = await db.query(
+      'SELECT COUNT(*) as count FROM orders WHERE mark = ? AND exported_at >= ? AND exported_at < ?',
+      ['exported', todayStr, tomorrowStr]
+    );
+    stats.exportedToday = todayResult[0]?.total || 0;
+
+    // 查询昨天导出数量
+    const yesterdayResult = await db.query(
+      'SELECT COUNT(*) as count FROM orders WHERE mark = ? AND exported_at >= ? AND exported_at < ?',
+      ['exported', yesterdayStr, todayStr]
+    );
+    stats.exportedYesterday = yesterdayResult[0]?.total || 0;
 
     // 3. 自定义时间范围统计 (如果有参数)
     if (customStartDate && customEndDate) {
@@ -218,22 +218,11 @@ router.get('/stats', async (req, res) => {
       const endDate = new Date(customEndDate);
       endDate.setHours(23, 59, 59, 999); // 包含结束日期的整天
 
-      const customStatsQuery = `
-        SELECT COUNT(*) as count 
-        FROM orders 
-        WHERE mark = 'exported' 
-        AND exported_at >= ? 
-        AND exported_at <= ?
-      `;
-      
-      const customStatsResult = await db.query(customStatsQuery, [
-        formatToDbTime(startDate),
-        formatToDbTime(endDate)
-      ]);
-      
-      if (customStatsResult.length > 0) {
-        stats.exportedCustom = customStatsResult[0].count || 0;
-      }
+      const customResult = await db.query(
+        'SELECT COUNT(*) as count FROM orders WHERE mark = ? AND exported_at >= ? AND exported_at <= ?',
+        ['exported', formatToDbTime(startDate), formatToDbTime(endDate)]
+      );
+      stats.exportedCustom = customResult[0]?.total || 0;
     }
 
     res.json(stats);
@@ -293,7 +282,6 @@ router.post('/', async (req, res) => {
       customer_name, 
       phone, 
       address, 
-      product_size,
       product_category = '',
       product_model = '',
       product_specs = '',
@@ -303,10 +291,10 @@ router.post('/', async (req, res) => {
       mark = 'pending_design'
     } = req.body;
     
-    if (!order_number || !customer_name || !phone || !address || !product_size) {
+    if (!order_number || !customer_name || !phone || !address || !product_specs) {
       return res.status(400).json({ 
         error: '缺少必要参数',
-        details: '订单号、客户姓名、电话、地址和产品尺寸为必填项'
+        details: '订单号、客户姓名、电话、地址和产品规格为必填项'
       });
     }
     
@@ -320,10 +308,8 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // 生成东八区时间
-    const beijingTime = new Date();
-    beijingTime.setHours(beijingTime.getHours() + 8);
-    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    // 使用 ISO 字符串 (UTC)
+    const timeString = new Date().toISOString();
     
     const result = await db.run(
       `INSERT INTO orders (
@@ -332,9 +318,9 @@ router.post('/', async (req, res) => {
         transaction_time, order_notes, mark, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        order_number, customer_name, phone, address, product_size,
+        order_number, customer_name, phone, address, product_specs,
         product_category, product_model, product_specs, quantity,
-        transaction_time, order_notes, mark, beijingTimeString, beijingTimeString
+        transaction_time, order_notes, mark, timeString, timeString
       ]
     );
     
@@ -376,7 +362,6 @@ router.put('/:id', async (req, res) => {
       customer_name: req.body.customer_name !== undefined ? req.body.customer_name : existingOrder.customer_name,
       phone: req.body.phone !== undefined ? req.body.phone : existingOrder.phone,
       address: req.body.address !== undefined ? req.body.address : existingOrder.address,
-      product_size: req.body.product_size !== undefined ? req.body.product_size : existingOrder.product_size,
       product_category: req.body.product_category !== undefined ? req.body.product_category : existingOrder.product_category,
       product_model: req.body.product_model !== undefined ? req.body.product_model : existingOrder.product_model,
       product_specs: req.body.product_specs !== undefined ? req.body.product_specs : existingOrder.product_specs,
@@ -387,23 +372,21 @@ router.put('/:id', async (req, res) => {
       export_status: req.body.export_status !== undefined ? req.body.export_status : existingOrder.export_status
     };
     
-    // 生成东八区时间
-    const beijingTime = new Date();
-    beijingTime.setHours(beijingTime.getHours() + 8);
-    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    // 使用 ISO 字符串 (UTC)
+    const timeString = new Date().toISOString();
     
     await db.run(
       `UPDATE orders SET 
         order_number = ?, customer_name = ?, phone = ?, address = ?, 
-        product_size = ?, product_category = ?, product_model = ?,
+        product_category = ?, product_model = ?,
         product_specs = ?, quantity = ?, transaction_time = ?, order_notes = ?, mark = ?, export_status = ?,
         updated_at = ? 
       WHERE id = ?`,
       [
         updateData.order_number, updateData.customer_name, updateData.phone, updateData.address, 
-        updateData.product_size, updateData.product_category, updateData.product_model,
+        updateData.product_category, updateData.product_model,
         updateData.product_specs, updateData.quantity, updateData.transaction_time, 
-        updateData.order_notes, updateData.mark, updateData.export_status, beijingTimeString, id
+        updateData.order_notes, updateData.mark, updateData.export_status, timeString, id
       ]
     );
     
@@ -431,6 +414,7 @@ router.delete('/:id', async (req, res) => {
 router.patch('/batch/export-status', async (req, res) => {
   try {
     const { orderIds, exportStatus } = req.body;
+    console.log(`收到批量更新请求: IDs=${JSON.stringify(orderIds)}, Status=${exportStatus}`);
     
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
       return res.status(400).json({ error: '订单ID列表不能为空' });
@@ -440,35 +424,39 @@ router.patch('/batch/export-status', async (req, res) => {
       return res.status(400).json({ error: '导出状态无效' });
     }
     
-    // 生成东八区时间
-    const beijingTime = new Date();
-    beijingTime.setHours(beijingTime.getHours() + 8);
-    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    // 使用 ISO 字符串 (UTC)
+    const timeString = new Date().toISOString();
     
     const placeholders = orderIds.map(() => '?').join(',');
-    const exportedAtValue = exportStatus === 'exported' ? beijingTimeString : null;
+    const exportedAtValue = exportStatus === 'exported' ? timeString : null;
     
     let sql, params;
     if (exportStatus === 'exported') {
       // 当设置为已导出时，同时更新mark字段为exported
       sql = `UPDATE orders SET export_status = ?, exported_at = ?, mark = ?, updated_at = ? WHERE id IN (${placeholders})`;
-      params = [exportStatus, exportedAtValue, 'exported', beijingTimeString, ...orderIds];
+      params = [exportStatus, exportedAtValue, 'exported', timeString, ...orderIds];
     } else {
       // 当设置为未导出时，只更新export_status和exported_at，不改变mark
       sql = `UPDATE orders SET export_status = ?, exported_at = ?, updated_at = ? WHERE id IN (${placeholders})`;
-      params = [exportStatus, exportedAtValue, beijingTimeString, ...orderIds];
+      params = [exportStatus, exportedAtValue, timeString, ...orderIds];
     }
     
-    await db.run(sql, params);
+    console.log('执行SQL:', sql);
+    console.log('参数:', params);
+
+    const result = await db.run(sql, params);
+    console.log('批量更新导出状态结果:', result);
     
     res.json({ 
       message: `成功更新 ${orderIds.length} 个订单的导出状态`,
-      updatedCount: orderIds.length,
+      updatedCount: result.changes,
       exportStatus
     });
   } catch (error) {
     console.error('批量更新导出状态失败:', error);
-    res.status(500).json({ error: '批量更新导出状态失败' });
+    if (error.message) console.error('错误详情:', error.message);
+    if (error.code) console.error('错误代码:', error.code);
+    res.status(500).json({ error: '批量更新导出状态失败', details: error.message });
   }
 });
 
@@ -508,13 +496,11 @@ router.get('/:id/export', async (req, res) => {
     }
     
     // 更新订单标记为已导出
-    const beijingTime = new Date();
-    beijingTime.setHours(beijingTime.getHours() + 8);
-    const beijingTimeString = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+    const timeString = new Date().toISOString();
     
     await db.run(
       'UPDATE orders SET mark = ?, updated_at = ? WHERE id = ?',
-      ['exported', beijingTimeString, id]
+      ['exported', timeString, id]
     );
     
     // 这里应该实现导出逻辑

@@ -12,7 +12,6 @@ const DesignEditor: React.FC = () => {
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [currentDesign, setCurrentDesign] = useState<Design | null>(null);
-  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedObject, setSelectedObject] = useState<any>(null);
@@ -61,7 +60,6 @@ const DesignEditor: React.FC = () => {
 
   useEffect(() => {
     loadOrderData();
-    loadTemplates();
   }, [orderId]);
 
   useEffect(() => {
@@ -83,20 +81,6 @@ const DesignEditor: React.FC = () => {
       alert('加载订单数据失败');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadTemplates = async () => {
-    try {
-      const templatesData = await templatesAPI.getAll();
-      // 处理可能的分页响应或直接数组响应
-      if (Array.isArray(templatesData)) {
-        setTemplates(templatesData);
-      } else {
-        setTemplates(templatesData.data || []);
-      }
-    } catch (error) {
-      console.error('加载模板失败:', error);
     }
   };
 
@@ -255,7 +239,7 @@ const DesignEditor: React.FC = () => {
             <h3 className="text-lg font-semibold mb-2">订单信息</h3>
             <div className="text-sm text-gray-600 space-y-1">
               <p>客户: {order.customer_name}</p>
-              <p>尺寸: {order.product_size}</p>
+              <p>规格: {order.product_specs}</p>
               <p>电话: {order.phone}</p>
             </div>
           </div>

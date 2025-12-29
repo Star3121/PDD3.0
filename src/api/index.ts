@@ -21,7 +21,10 @@ async function request<T>(
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || '请求失败');
+      // 优先处理后端返回的 error 和 details 字段
+      const errorMessage = error.message || error.error || '请求失败';
+      const details = error.details ? ` (${error.details})` : '';
+      throw new Error(`${errorMessage}${details}`);
     }
     
     return await response.json();
@@ -52,7 +55,9 @@ async function uploadFile(endpoint: string, file: File, data?: Record<string, an
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || '上传失败');
+      const errorMessage = error.message || error.error || '上传失败';
+      const details = error.details ? ` (${error.details})` : '';
+      throw new Error(`${errorMessage}${details}`);
     }
     
     return await response.json();
@@ -257,7 +262,6 @@ export interface Order {
   customer_name: string;
   phone: string;
   address: string;
-  product_size: string;
   product_category?: string;
   product_model?: string;
   product_specs?: string;
@@ -276,7 +280,6 @@ export interface CreateOrderData {
   customer_name: string;
   phone: string;
   address: string;
-  product_size: string;
   product_category?: string;
   product_model?: string;
   product_specs?: string;
@@ -292,7 +295,6 @@ export interface UpdateOrderData {
   customer_name?: string;
   phone?: string;
   address?: string;
-  product_size?: string;
   product_category?: string;
   product_model?: string;
   product_specs?: string;

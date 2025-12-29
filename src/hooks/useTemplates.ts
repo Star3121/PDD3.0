@@ -1,12 +1,6 @@
-import useSWR from 'swr';
 import { useState, useEffect } from 'react';
 import { templatesAPI, categoriesAPI } from '../api';
 import { Template, Category, PaginatedResponse } from '../api';
-
-const fetcher = (url: string) => fetch(url).then(res => {
-  if (!res.ok) throw new Error('Failed to fetch');
-  return res.json();
-});
 
 interface UseTemplatesParams {
   page?: number;
@@ -38,14 +32,7 @@ export function useTemplates({
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // 获取静态数据（优先使用）
-  const { data: staticData, mutate: mutateStatic } = useSWR('/data/templates.json', fetcher, {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-    onError: () => console.log('Static data not found, falling back to API')
-  });
-
-  // 获取分类数据（如果静态数据中没有）
+  // 获取分类数据
   const fetchCategories = async () => {
     try {
       const response = await categoriesAPI.getAll();
@@ -56,43 +43,15 @@ export function useTemplates({
   };
 
   useEffect(() => {
-    if (staticData?.categories) {
-      setCategories(staticData.categories);
-    } else {
-      fetchCategories();
-    }
-  }, [staticData]);
+    fetchCategories();
+  }, []);
 
   const fetchTemplates = async () => {
     if (!enabled) return;
     
     setLoading(true);
     try {
-      // 优先使用静态数据进行客户端筛选
-      if (staticData && staticData.templates) {
-        let result = staticData.templates;
-        
-        // 筛选
-        if (search && search.trim()) {
-            const lowerQuery = search.trim().toLowerCase();
-            result = result.filter((t: Template) => t.name.toLowerCase().includes(lowerQuery));
-        }
-        if (category && category !== 'all') {
-            result = result.filter((t: Template) => t.category === category);
-        }
-        
-        // 分页
-        const currentTotal = result.length;
-        setTotal(currentTotal);
-        setTotalPages(Math.ceil(currentTotal / pageSize));
-        
-        const start = (page - 1) * pageSize;
-        setTemplates(result.slice(start, start + pageSize));
-        setLoading(false);
-        return;
-      }
-
-      // 降级到 API
+      // API 请求
       const params = {
         page,
         pageSize,
@@ -121,7 +80,7 @@ export function useTemplates({
 
   useEffect(() => {
     fetchTemplates();
-  }, [page, pageSize, search, category, staticData, enabled]);
+  }, [page, pageSize, search, category, enabled]);
 
   return {
     templates,
@@ -130,7 +89,6 @@ export function useTemplates({
     total,
     totalPages,
     refresh: () => {
-        mutateStatic();
         fetchTemplates();
     }
   };

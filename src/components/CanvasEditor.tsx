@@ -2509,11 +2509,16 @@ const rebuildFrameImagePairs = () => {
         // 计算适配画布的尺寸和位置
         const fitData = calculateImageFitToCanvas(originalWidth, originalHeight);
         
+        // 修复：使用中心点定位，确保与相框（也是中心定位）在保存/加载时行为一致
+        // 同时设置 strokeWidth: 0 防止边框导致的微小位移
         img.set({
-          left: fitData.left,
-          top: fitData.top,
+          left: canvasInstance.current!.width! / 2,
+          top: canvasInstance.current!.height! / 2,
+          originX: 'center',
+          originY: 'center',
           scaleX: fitData.scale,
           scaleY: fitData.scale,
+          strokeWidth: 0,
           selectable: true,
           hasControls: true,
           hasBorders: true,

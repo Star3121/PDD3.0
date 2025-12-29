@@ -68,7 +68,7 @@ const DesignPreview: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-gray-900">{order.order_number}</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {order.product_size} · {order.product_specs || '标准规格'}
+              {order.product_specs || '标准规格'}
             </p>
           </div>
           <div className="flex gap-2">

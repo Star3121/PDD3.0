@@ -35,7 +35,6 @@ const OrderList: React.FC = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   // const [allOrdersForCounting, setAllOrdersForCounting] = useState<Order[]>([]);
-  const [designPreviews, setDesignPreviews] = useState<Record<number, string>>({});
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [updatingMarks, setUpdatingMarks] = useState<Set<number>>(new Set());
@@ -69,6 +68,23 @@ const OrderList: React.FC = () => {
     pending_confirm: '待确认',
     confirmed: '已确认',
     exported: '已导出'
+  };
+
+  // 根据分类生成固定颜色
+  const getCategoryColor = (category: string) => {
+    if (!category) return 'bg-gray-500';
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 
+      'bg-orange-500', 'bg-pink-500', 'bg-teal-500', 
+      'bg-indigo-500', 'bg-cyan-500', 'bg-rose-500',
+      'bg-amber-500', 'bg-emerald-500', 'bg-violet-500'
+    ];
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = category.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
   };
 
   // 时间筛选辅助函数（使用东八区时间）
@@ -123,13 +139,13 @@ const OrderList: React.FC = () => {
 
   // 初始加载和主要筛选条件变化时显示loading
   useEffect(() => {
-    fetchOrders(true);
+    fetchOrders('loading');
   }, [currentPage, pageSize, searchQuery, markFilter]);
 
   // 时间筛选变化时不显示loading，避免闪屏
   useEffect(() => {
     if (markFilter === 'exported') {
-      fetchOrders(false);
+      fetchOrders('fade');
     }
   }, [exportTimeFilter, customDateRange]);
 
@@ -153,14 +169,15 @@ const OrderList: React.FC = () => {
     }
   };
 
-  const fetchOrders = async (showLoading = true) => {
+  const fetchOrders = async (mode: 'loading' | 'fade' | 'silent' = 'loading') => {
     try {
-      if (showLoading) {
+      if (mode === 'loading') {
         setLoading(true);
-      } else {
+      } else if (mode === 'fade') {
         // 时间筛选时使用淡出效果
         setListVisible(false);
       }
+      
       const params: any = {
         page: currentPage,
         pageSize,
@@ -181,54 +198,30 @@ const OrderList: React.FC = () => {
       
       const response = await ordersAPI.getAll(params);
       
-      let currentOrders: Order[];
       if ('data' in response) {
         // 新的分页API响应格式
-        currentOrders = response.data;
-
         setOrders(response.data);
         setTotal(response.pagination.total);
         setTotalPages(response.pagination.totalPages);
       } else {
         // 兼容旧的API响应格式
-        currentOrders = response;
-
         setOrders(response);
         setTotal(response.length);
         setTotalPages(Math.ceil(response.length / pageSize));
       }
-      // 拉取每个订单的最新设计预览（只获取还没有缓存的）
-      const previews: Record<number, string> = { ...designPreviews };
-      const ordersNeedingPreviews = currentOrders.filter(o => !previews[o.id]);
-      
-      if (ordersNeedingPreviews.length > 0) {
-        await Promise.all(
-          ordersNeedingPreviews.map(async (o) => {
-            try {
-              const designs = await designsAPI.getByOrderId(o.id);
-              if (Array.isArray(designs) && designs.length > 0) {
-                // 选择最近更新且有预览图的设计
-                const withPreview = designs.filter(d => !!d.preview_path);
-                const target = (withPreview.length > 0 ? withPreview : designs)
-                  .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())[0];
-                if (target?.preview_path) {
-                  previews[o.id] = buildImageUrl(target.preview_path);
-                }
-              }
-            } catch (e) {
-              console.warn('获取设计预览失败:', e);
-            }
-          })
-        );
-      }
-      setDesignPreviews(previews);
     } catch (error) {
       console.error('获取订单列表失败:', error);
-      alert('获取订单列表失败');
+      // 只有在非静默模式下才提示错误
+      if (mode !== 'silent') {
+        alert('获取订单列表失败');
+      }
     } finally {
-      setLoading(false);
-      // 恢复列表可见性，触发淡入效果
-      setTimeout(() => setListVisible(true), 50);
+      if (mode === 'loading') {
+        setLoading(false);
+      } else if (mode === 'fade') {
+        // 恢复列表可见性，触发淡入效果
+        setTimeout(() => setListVisible(true), 50);
+      }
     }
   };
 
@@ -267,9 +260,19 @@ const OrderList: React.FC = () => {
 
   // 搜索处理函数
   const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
+    setSearchInput(query);
+  };
+
+  const handleSearchSubmit = () => {
+    setSearchQuery(searchInput);
     setCurrentPage(1); // 重置到第一页
     setSelectedOrders(new Set()); // 清空选择
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearchSubmit();
+    }
   };
 
   // 筛选处理函数
@@ -601,16 +604,34 @@ const OrderList: React.FC = () => {
   // 更新订单导出状态
   const updateOrdersExportStatus = async (orderIds: number[]) => {
     try {
-      await ordersAPI.batchUpdateExportStatus(orderIds, 'exported');
+      console.log('开始更新订单导出状态, IDs:', orderIds);
+      const response = await ordersAPI.batchUpdateExportStatus(orderIds, 'exported');
+      console.log('后端状态更新成功:', response);
       
       // 更新本地状态
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          orderIds.includes(order.id) 
-            ? { ...order, export_status: 'exported' as const, exported_at: new Date().toISOString(), mark: 'exported' as const }
-            : order
-        )
-      );
+      setOrders(prevOrders => {
+        const newOrders = prevOrders.map(order => {
+          if (orderIds.includes(order.id)) {
+            console.log(`更新订单 ${order.id} 状态为 exported`);
+            return { 
+              ...order, 
+              export_status: 'exported' as const, 
+              exported_at: new Date().toISOString(), 
+              mark: 'exported' as const 
+            };
+          }
+          return order;
+        });
+        return newOrders;
+      });
+
+      toast.success('订单状态已更新为已导出');
+      
+      // 为了确保数据一致性，延迟静默刷新一次列表
+      setTimeout(() => {
+        console.log('执行延迟静默刷新');
+        fetchOrders('silent');
+      }, 1000);
       
       // 更新统计数据
       await fetchAllOrdersForCounting();
@@ -628,15 +649,16 @@ const OrderList: React.FC = () => {
       // 更新订单标记
       const updatedOrder = await ordersAPI.update(orderId, { mark: newMark });
       
-      // 更新本地状态，包括updated_at时间（使用东八区时间）
-      const beijingTime = new Date();
-      beijingTime.setHours(beijingTime.getHours() + 8);
-      const currentTime = beijingTime.toISOString().replace('T', ' ').substring(0, 19);
+      // 更新本地状态，包括updated_at时间（使用ISO时间，前端会自动转换）
+      const currentTime = new Date().toISOString();
       setOrders(prevOrders => 
         prevOrders.map(order => 
           order.id === orderId ? { ...order, mark: newMark, updated_at: currentTime } : order
         )
       );
+
+      // 更新统计数据
+      fetchAllOrdersForCounting();
     } catch (error) {
       console.error('更新订单标记失败:', error);
       alert('更新订单标记失败');
@@ -666,12 +688,17 @@ const OrderList: React.FC = () => {
     try {
       // 确保所有必需字段都存在
       const updateData = {
-        order_number: updatedOrderData.order_number || editingOrder.order_number,
-        customer_name: updatedOrderData.customer_name || editingOrder.customer_name,
-        phone: updatedOrderData.phone || editingOrder.phone,
-        address: updatedOrderData.address || editingOrder.address,
-        product_size: updatedOrderData.product_size || editingOrder.product_size,
-        mark: updatedOrderData.mark || editingOrder.mark
+        order_number: updatedOrderData.order_number ?? editingOrder.order_number,
+        customer_name: updatedOrderData.customer_name ?? editingOrder.customer_name,
+        phone: updatedOrderData.phone ?? editingOrder.phone,
+        address: updatedOrderData.address ?? editingOrder.address,
+        product_category: updatedOrderData.product_category ?? editingOrder.product_category,
+        product_model: updatedOrderData.product_model ?? editingOrder.product_model,
+        product_specs: updatedOrderData.product_specs ?? editingOrder.product_specs,
+        quantity: updatedOrderData.quantity ?? editingOrder.quantity,
+        transaction_time: updatedOrderData.transaction_time ?? editingOrder.transaction_time,
+        order_notes: updatedOrderData.order_notes ?? editingOrder.order_notes,
+        mark: updatedOrderData.mark ?? editingOrder.mark
       };
 
       const updatedOrder = await ordersAPI.update(editingOrder.id, updateData);
@@ -718,6 +745,9 @@ const OrderList: React.FC = () => {
         return newSet;
       });
       
+      // 更新统计数据
+      fetchAllOrdersForCounting();
+      
       alert('订单删除成功');
       handleCloseDeleteModal();
     } catch (error) {
@@ -750,6 +780,9 @@ const OrderList: React.FC = () => {
       
       // 清空选中列表
       setSelectedOrders(new Set());
+      
+      // 更新统计数据
+      fetchAllOrdersForCounting();
       
       alert(`成功删除 ${result.deletedCount} 个订单`);
       handleCloseBatchDeleteModal();
@@ -1009,7 +1042,14 @@ const OrderList: React.FC = () => {
         ) : (
           <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 transition-opacity duration-300 ease-in-out ${listVisible ? 'opacity-100' : 'opacity-0'}`}>
             {orders.map((order) => (
-              <div key={order.id} className="card p-4 hover:shadow-lg transition-all duration-200 bg-white flex flex-col transform hover:scale-[1.02]">
+              <div key={order.id} className="relative card p-4 hover:shadow-lg transition-all duration-200 bg-white flex flex-col transform hover:scale-[1.02]">
+                {/* 产品分类角标 */}
+                {order.product_category && (
+                  <div className={`absolute top-0 right-0 px-3 py-1 text-xs text-white font-medium rounded-bl-lg rounded-tr-lg shadow-sm z-10 ${getCategoryColor(order.product_category)}`}>
+                    {order.product_category}
+                  </div>
+                )}
+                
                 {/* 主要内容区域 */}
                 <div className="flex gap-3 flex-1">
                   {/* 左侧内容区域 */}
@@ -1068,8 +1108,8 @@ const OrderList: React.FC = () => {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-gray-500 font-medium">尺寸:</span>
-                          <span className="text-xs text-gray-700">{order.product_size}</span>
+                          <span className="text-xs text-gray-500 font-medium">规格:</span>
+                          <span className="text-xs text-gray-700">{order.product_specs}</span>
                         </div>
                         <div 
                           className="flex items-center text-gray-400 cursor-help" 
@@ -1083,19 +1123,7 @@ const OrderList: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* 右侧预览图区域 - 3:4 比例 */}
-                  {designPreviews[order.id] && (
-                    <div className="w-16 flex-shrink-0">
-                      <div className="w-16 h-[85px] rounded-lg border border-gray-200 overflow-hidden bg-gray-50 shadow-sm">
-                        <img
-                          src={designPreviews[order.id]}
-                          alt="设计预览"
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    </div>
-                  )}
+                  {/* 右侧预览图区域 - 已移除以减少流量消耗 */}
                 </div>
 
                 {/* 操作按钮 - 固定在卡片底部 */}

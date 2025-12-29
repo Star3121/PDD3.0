@@ -25,7 +25,12 @@ const OrderEditModal: React.FC<OrderEditModalProps> = ({
         customer_name: order.customer_name || '',
         phone: order.phone || '',
         address: order.address || '',
-        product_size: order.product_size || '',
+        product_category: order.product_category || '',
+        product_model: order.product_model || '',
+        product_specs: order.product_specs || '',
+        quantity: order.quantity || 1,
+        transaction_time: order.transaction_time || '',
+        order_notes: order.order_notes || '',
         mark: order.mark || 'pending_design'
       });
       setErrors({});
@@ -64,8 +69,8 @@ const OrderEditModal: React.FC<OrderEditModalProps> = ({
     if (!formData.address?.trim()) {
       newErrors.address = '收货地址不能为空';
     }
-    if (!formData.product_size?.trim()) {
-      newErrors.product_size = '产品尺寸不能为空';
+    if (!formData.product_specs?.trim()) {
+      newErrors.product_specs = '产品规格不能为空';
     }
 
     setErrors(newErrors);
@@ -149,7 +154,20 @@ const OrderEditModal: React.FC<OrderEditModalProps> = ({
                   )}
                 </div>
 
-
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    交易时间
+                  </label>
+                  <input
+                    type="text"
+                    name="transaction_time"
+                    value={formData.transaction_time || ''}
+                    onChange={handleInputChange}
+                    placeholder="例如: 2023-01-01 12:00:00"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -212,47 +230,117 @@ const OrderEditModal: React.FC<OrderEditModalProps> = ({
             {/* 收货信息 */}
             <div>
               <h4 className="text-base font-medium text-gray-900 mb-4">收货信息</h4>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  收货地址 *
-                </label>
-                <textarea
-                  name="address"
-                  value={formData.address || ''}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.address ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  disabled={loading}
-                />
-                {errors.address && (
-                  <p className="mt-1 text-sm text-red-600">{errors.address}</p>
-                )}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    收货地址 *
+                  </label>
+                  <textarea
+                    name="address"
+                    value={formData.address || ''}
+                    onChange={handleInputChange}
+                    rows={2}
+                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.address ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    disabled={loading}
+                  />
+                  {errors.address && (
+                    <p className="mt-1 text-sm text-red-600">{errors.address}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    订单备注
+                  </label>
+                  <textarea
+                    name="order_notes"
+                    value={formData.order_notes || ''}
+                    onChange={handleInputChange}
+                    rows={2}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                </div>
               </div>
             </div>
 
             {/* 产品信息 */}
             <div>
               <h4 className="text-base font-medium text-gray-900 mb-4">产品信息</h4>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  产品尺寸 *
-                </label>
-                <input
-                  type="text"
-                  name="product_size"
-                  value={formData.product_size || ''}
-                  onChange={handleInputChange}
-                  placeholder="例如: 150x200cm"
-                  className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.product_size ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  disabled={loading}
-                />
-                {errors.product_size && (
-                  <p className="mt-1 text-sm text-red-600">{errors.product_size}</p>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    产品分类
+                  </label>
+                  <select
+                    name="product_category"
+                    value={formData.product_category || ''}
+                    onChange={handleInputChange}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                  >
+                    <option value="">请选择产品类别</option>
+                    <option value="抱枕">抱枕</option>
+                    <option value="法兰毯">法兰毯</option>
+                    <option value="羊羔绒">羊羔绒</option>
+                    <option value="挂布">挂布</option>
+                    <option value="地毯">地毯</option>
+                    <option value="杯子">杯子</option>
+                    <option value="抱枕被">抱枕被</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    产品型号
+                  </label>
+                  <input
+                    type="text"
+                    name="product_model"
+                    value={formData.product_model || ''}
+                    onChange={handleInputChange}
+                    placeholder="例如: A款"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    产品规格 *
+                  </label>
+                  <input
+                    type="text"
+                    name="product_specs"
+                    value={formData.product_specs || ''}
+                    onChange={handleInputChange}
+                    placeholder="例如: 150x200cm"
+                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.product_specs ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    disabled={loading}
+                  />
+                  {errors.product_specs && (
+                    <p className="mt-1 text-sm text-red-600">{errors.product_specs}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    数量
+                  </label>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity || 1}
+                    onChange={handleInputChange}
+                    min="1"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                  />
+                </div>
               </div>
             </div>
 

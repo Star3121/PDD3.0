@@ -15,23 +15,14 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
   onTemplateSelect
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-
-  // 搜索防抖
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery]);
 
   const { templates, categories, loading, totalPages } = useTemplates({
     page: currentPage,
     pageSize: 24,
-    search: debouncedSearch,
+    search: activeSearchQuery,
     category: selectedCategory,
     enabled: isOpen
   });
@@ -48,6 +39,10 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
+  };
+
+  const handleSearch = () => {
+    setActiveSearchQuery(searchQuery);
     setCurrentPage(1); // 重置到第一页
   };
 
@@ -77,14 +72,21 @@ const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
         {/* 搜索和筛选 */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex gap-4">
-            <div className="flex-1">
+            <div className="flex-1 flex gap-2">
               <input
                 type="text"
                 placeholder="搜索模板..."
                 value={searchQuery}
                 onChange={handleSearchChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <button
+                onClick={handleSearch}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                搜索
+              </button>
             </div>
             <div className="w-48">
               <select

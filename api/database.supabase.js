@@ -11,7 +11,7 @@ class SupabaseDatabase {
     if (this.initialized) return;
 
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('Supabase URL 和 Key 需要在环境变量中提供');
@@ -293,7 +293,7 @@ class SupabaseDatabase {
         if (fromMatch) tableName = fromMatch[1];
         
         // Extract WHERE clause
-        const whereMatch = sql.match(/where\s+(.+?)(?:\s+order\s+by|\s+limit|$)/i);
+        const whereMatch = sql.match(/where\s+([\s\S]+?)(?:\s+order\s+by|\s+limit|$)/i);
         if (whereMatch) whereClause = whereMatch[1];
         
         // Extract ORDER BY
@@ -329,6 +329,9 @@ class SupabaseDatabase {
                 break;
               case 'in':
                 query = query.in(condition.column, condition.values);
+                break;
+              case 'ilike':
+                query = query.ilike(condition.column, condition.value);
                 break;
               case 'eq':
                 query = query.eq(condition.column, condition.value);
@@ -434,7 +437,7 @@ class SupabaseDatabase {
         const tableName = tableMatch[1];
         const conditions = this.parseWhereClause(whereMatch[1], params);
         
-        let query = this.supabase.from(tableName).delete();
+        let query = this.supabase.from(tableName).delete().select();
         conditions.forEach(condition => {
           if (condition.type === 'in') {
             query = query.in(condition.column, condition.values);
@@ -467,37 +470,156 @@ class SupabaseDatabase {
   // Helper method to parse WHERE clause
   parseWhereClause(whereClause, params) {
     const conditions = [];
-    
-    // Support IN (...) clause
-    const inMatch = whereClause.match(/(\w+)\s+in\s*\(([^)]+)\)/i);
-    if (inMatch) {
-      // Filter out undefined values and ensure all values are valid
-      const validValues = params.filter(value => value !== undefined && value !== null);
-      if (validValues.length === 0) {
-        throw new Error('IN子句中没有有效的值');
+    const normalized = String(whereClause || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return conditions;
+
+    const toOrLikePattern = (value) => {
+      if (typeof value !== 'string') return value;
+      return value.replace(/%/g, '*').replace(/_/g, '?');
+    };
+
+    const splitByTopLevelAnd = (input) => {
+      const parts = [];
+      let depth = 0;
+      let start = 0;
+      const s = input;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '(') depth++;
+        if (ch === ')') depth = Math.max(0, depth - 1);
+        if (depth === 0 && /\s/i.test(ch)) {
+          const slice = s.slice(i);
+          const m = slice.match(/^\s+AND\s+/i);
+          if (m) {
+            parts.push(s.slice(start, i).trim());
+            i += m[0].length - 1;
+            start = i + 1;
+          }
+        }
       }
-      conditions.push({
-        type: 'in',
-        column: inMatch[1],
-        values: validValues
-      });
-      return conditions;
+      parts.push(s.slice(start).trim());
+      return parts.filter(Boolean);
+    };
+
+    const splitByTopLevelOrInsideParens = (input) => {
+      const s = input.trim().replace(/^\(/, '').replace(/\)$/, '').trim();
+      const parts = [];
+      let depth = 0;
+      let start = 0;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '(') depth++;
+        if (ch === ')') depth = Math.max(0, depth - 1);
+        if (depth === 0 && /\s/i.test(ch)) {
+          const slice = s.slice(i);
+          const m = slice.match(/^\s+OR\s+/i);
+          if (m) {
+            parts.push(s.slice(start, i).trim());
+            i += m[0].length - 1;
+            start = i + 1;
+          }
+        }
+      }
+      parts.push(s.slice(start).trim());
+      return parts.filter(Boolean);
+    };
+
+    let cursor = 0;
+    const clauses = splitByTopLevelAnd(normalized);
+
+    for (const clause of clauses) {
+      const trimmed = clause.trim();
+
+      if (trimmed.startsWith('(') && trimmed.endsWith(')') && /\s+OR\s+/i.test(trimmed)) {
+        const orParts = splitByTopLevelOrInsideParens(trimmed);
+        const orFilters = [];
+        for (const part of orParts) {
+          const likeMatch = part.match(/^(\w+)\s+LIKE\s+\?$/i);
+          if (likeMatch) {
+            const col = likeMatch[1];
+            const v = params[cursor++];
+            if (v !== undefined && v !== null && String(v).length > 0) {
+              orFilters.push(`${col}.ilike.${toOrLikePattern(String(v))}`);
+            }
+            continue;
+          }
+          const eqMatch = part.match(/^(\w+)\s*=\s*\?$/i);
+          if (eqMatch) {
+            const col = eqMatch[1];
+            const v = params[cursor++];
+            if (v !== undefined && v !== null) {
+              orFilters.push(`${col}.eq.${String(v)}`);
+            }
+            continue;
+          }
+        }
+        if (orFilters.length > 0) {
+          conditions.push({ type: 'or', filter: orFilters.join(',') });
+        }
+        continue;
+      }
+
+      const inMatch = trimmed.match(/^(\w+)\s+IN\s*\(([^)]+)\)$/i);
+      if (inMatch) {
+        const col = inMatch[1];
+        const placeholderCount = inMatch[2].split(',').filter(p => p.trim() === '?').length;
+        const values = params.slice(cursor, cursor + placeholderCount);
+        cursor += placeholderCount;
+        conditions.push({ type: 'in', column: col, values });
+        continue;
+      }
+
+      const likeMatch = trimmed.match(/^(\w+)\s+LIKE\s+\?$/i);
+      if (likeMatch) {
+        const col = likeMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) {
+          conditions.push({ type: 'ilike', column: col, value: String(v) });
+        }
+        continue;
+      }
+
+      const gteMatch = trimmed.match(/^(\w+)\s*>=\s*\?$/i);
+      if (gteMatch) {
+        const col = gteMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) conditions.push({ type: 'gte', column: col, value: v });
+        continue;
+      }
+
+      const lteMatch = trimmed.match(/^(\w+)\s*<=\s*\?$/i);
+      if (lteMatch) {
+        const col = lteMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) conditions.push({ type: 'lte', column: col, value: v });
+        continue;
+      }
+
+      const gtMatch = trimmed.match(/^(\w+)\s*>\s*\?$/i);
+      if (gtMatch) {
+        const col = gtMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) conditions.push({ type: 'gt', column: col, value: v });
+        continue;
+      }
+
+      const ltMatch = trimmed.match(/^(\w+)\s*<\s*\?$/i);
+      if (ltMatch) {
+        const col = ltMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) conditions.push({ type: 'lt', column: col, value: v });
+        continue;
+      }
+
+      const eqMatch = trimmed.match(/^(\w+)\s*=\s*\?$/i);
+      if (eqMatch) {
+        const col = eqMatch[1];
+        const v = params[cursor++];
+        if (v !== undefined && v !== null) conditions.push({ type: 'eq', column: col, value: v });
+        continue;
+      }
     }
-    
-    // Fallback: support equality conditions combined with AND
-    const parts = whereClause.split(/\s+and\s+/i);
-    
-    parts.forEach((part, index) => {
-      const match = part.match(/(\w+)\s*=\s*\?/i);
-      if (match && params[index] !== undefined && params[index] !== null) {
-        conditions.push({
-          type: 'eq',
-          column: match[1],
-          value: params[index]
-        });
-      }
-    });
-    
+
     return conditions;
   }
   

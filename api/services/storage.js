@@ -7,7 +7,7 @@ import sharp from 'sharp';
 
 // 初始化 Supabase 客户端
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
 
 // R2/S3 配置

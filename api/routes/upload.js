@@ -97,7 +97,7 @@ router.get('/export/:orderId', async (req, res) => {
       customer_name: order.customer_name,
       phone: order.phone,
       address: order.address,
-      product_size: order.product_size,
+      product_specs: order.product_specs,
       created_at: order.created_at,
       designs: designs.map(design => ({
         name: design.name,
@@ -198,7 +198,7 @@ router.post('/export/batch', async (req, res) => {
         customer_name: order.customer_name,
         phone: order.phone,
         address: order.address,
-        product_size: order.product_size,
+        product_specs: order.product_specs,
         created_at: order.created_at,
         designs: designs.map(design => ({
           name: design.name,

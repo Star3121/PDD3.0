@@ -12,7 +12,6 @@ interface OrderFormData {
   customer_name: string;
   phone: string;
   address: string;
-  product_size: string;
   product_category: string;
   product_model: string;
   product_specs: string;
@@ -110,7 +109,6 @@ const CreateOrder: React.FC = () => {
     customer_name: '',
     phone: '',
     address: '',
-    product_size: '',
     product_category: '',
     product_model: '',
     product_specs: '',
@@ -138,7 +136,6 @@ const CreateOrder: React.FC = () => {
         customer_name: extractCustomerName(result.recipientInfo),
         phone: extractPhone(result.recipientInfo),
         address: extractAddress(result.recipientInfo),
-        product_size: result.productSpecs,
         product_category: result.productCategory,
         product_model: result.productModel,
         product_specs: result.productSpecs,
@@ -175,7 +172,6 @@ const CreateOrder: React.FC = () => {
         customer_name: extractCustomerName(result.recipientInfo),
         phone: extractPhone(result.recipientInfo),
         address: extractAddress(result.recipientInfo),
-        product_size: result.productSpecs,
         product_category: result.productCategory,
         product_model: result.productModel,
         product_specs: result.productSpecs,
@@ -248,7 +244,7 @@ const CreateOrder: React.FC = () => {
 
   // 保存单个订单
   const saveSingleOrder = async (order: OrderFormData) => {
-    if (!order.order_number || !order.customer_name || !order.phone || !order.address || !order.product_size) {
+    if (!order.order_number || !order.customer_name || !order.phone || !order.address || !order.product_specs) {
       alert('请填写所有必填字段');
       return;
     }
@@ -260,12 +256,11 @@ const CreateOrder: React.FC = () => {
         customer_name: order.customer_name,
         phone: order.phone,
         address: order.address,
-        product_size: order.product_size,
         product_category: order.product_category,
         product_model: order.product_model,
         product_specs: order.product_specs,
         quantity: order.quantity,
-        transaction_time: order.transaction_time,
+        transaction_time: order.transaction_time ? new Date(order.transaction_time).toISOString() : null,
         order_notes: order.order_notes
       };
       
@@ -350,7 +345,7 @@ const CreateOrder: React.FC = () => {
 
     // 检查所有订单是否填写完整
     const incompleteOrders = unsavedOrders.filter(order => 
-      !order.order_number || !order.customer_name || !order.phone || !order.address || !order.product_size
+      !order.order_number || !order.customer_name || !order.phone || !order.address || !order.product_specs
     );
     
     if (incompleteOrders.length > 0) {
@@ -372,12 +367,11 @@ const CreateOrder: React.FC = () => {
             customer_name: order.customer_name,
             phone: order.phone,
             address: order.address,
-            product_size: order.product_size,
             product_category: order.product_category,
             product_model: order.product_model,
             product_specs: order.product_specs,
             quantity: order.quantity,
-            transaction_time: order.transaction_time,
+            transaction_time: order.transaction_time ? new Date(order.transaction_time).toISOString() : null,
             order_notes: order.order_notes
           };
           
@@ -676,12 +670,12 @@ const CreateOrder: React.FC = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        产品尺寸 *
+                        产品规格 *
                       </label>
                       <input
                         type="text"
-                        value={order.product_size}
-                        onChange={(e) => updateOrder(order.id, 'product_size', e.target.value)}
+                        value={order.product_specs}
+                        onChange={(e) => updateOrder(order.id, 'product_specs', e.target.value)}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="例如: 150x200cm"
                         disabled={order.saved}
@@ -692,14 +686,21 @@ const CreateOrder: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         产品类别
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={order.product_category}
                         onChange={(e) => updateOrder(order.id, 'product_category', e.target.value)}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="例如: 抱枕"
                         disabled={order.saved}
-                      />
+                      >
+                        <option value="">请选择产品类别</option>
+                        <option value="抱枕">抱枕</option>
+                        <option value="法兰毯">法兰毯</option>
+                        <option value="羊羔绒">羊羔绒</option>
+                        <option value="挂布">挂布</option>
+                        <option value="地毯">地毯</option>
+                        <option value="杯子">杯子</option>
+                        <option value="抱枕被">抱枕被</option>
+                      </select>
                     </div>
 
                     <div>
@@ -715,18 +716,7 @@ const CreateOrder: React.FC = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        产品规格
-                      </label>
-                      <input
-                        type="text"
-                        value={order.product_specs}
-                        onChange={(e) => updateOrder(order.id, 'product_specs', e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={order.saved}
-                      />
-                    </div>
+
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
