@@ -273,26 +273,27 @@ router.delete('/', async (req, res) => {
     }
 
     // 查询要删除的模板信息
-    const templates = await db.query('SELECT * FROM templates WHERE id IN (?)', validIds);
+    const placeholders = validIds.map(() => '?').join(',');
+    const templates = await db.query(`SELECT * FROM templates WHERE id IN (${placeholders})`, validIds);
     
     if (templates.length === 0) {
       return res.status(404).json({ error: '未找到要删除的模板' });
     }
 
-    // 删除关联的文件
-    for (const template of templates) {
+    // 删除关联的文件 (并行处理)
+    const deleteFilePromises = templates.map(template => {
       if (template.image_path) {
         const filename = path.basename(template.image_path);
-        try {
-          await storageService.deleteFile('templates', filename);
-        } catch (error) {
-          console.log(`删除图片文件失败: ${filename}`, error.message);
-        }
+        return storageService.deleteFile('templates', filename)
+          .catch(error => console.log(`删除图片文件失败: ${filename}`, error.message));
       }
-    }
+      return Promise.resolve();
+    });
+
+    await Promise.all(deleteFilePromises);
 
     // 删除数据库记录
-    await db.query('DELETE FROM templates WHERE id IN (?)', validIds);
+    await db.query(`DELETE FROM templates WHERE id IN (${placeholders})`, validIds);
 
     res.json({ 
       message: '批量删除成功',

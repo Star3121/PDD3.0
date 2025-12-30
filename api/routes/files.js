@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import storageService from '../services/storage.js';
-import fetch from 'node-fetch';
+import { Readable } from 'stream';
 
 const router = express.Router();
 
@@ -14,18 +14,16 @@ router.options('*', (req, res) => {
   res.status(200).end();
 });
 
-// 辅助函数：发送 SVG 占位图
-const sendPlaceholder = (res, text) => {
+const sendPlaceholderSvg = (res, text) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'no-cache');
-  // 即使是错误图片，也必须带 CORS 头，否则 Canvas 依然报错
-  res.setHeader('Access-Control-Allow-Origin', '*'); 
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  
-  const svg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg" style="background:#f0f0f0">
-    <text x="50%" y="50%" font-family="Arial" font-size="14" fill="#999" text-anchor="middle" dy=".3em">${text}</text>
-  </svg>`;
-  res.send(svg);
+  res.send(
+    `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" fill="#f0f0f0"/><text x="50%" y="50%" font-family="Arial" font-size="14" fill="#999" text-anchor="middle" dy=".3em">${text}</text></svg>`
+  );
 };
 
 // 通用文件请求处理函数
@@ -41,39 +39,38 @@ const handleFileRequest = async (req, res, bucket, errorMessage) => {
     const access = await storageService.getFileAccess(bucket, filename);
 
     if (!access) {
-      // 返回占位图代替 404 JSON，防止 ORB 错误
-      return sendPlaceholder(res, 'Image Not Found');
+      return sendPlaceholderSvg(res, 'Image Not Found');
     }
 
-    // 策略 1: 【修改】由重定向改为代理 (Proxy)
-    // 解决 ORB/CORS 问题的核心：由后端转发请求
     if (access.type === 'redirect') {
-      try {
-        const response = await fetch(access.url);
-        
-        // 如果上游 (Supabase) 返回非 200 (如 404/403)，抛出错误以触发 fallback
-        if (!response.ok) {
-           throw new Error(`Upstream ${response.status}`);
-        }
-        
-        // 转发 Content-Type
-        const contentType = response.headers.get('content-type');
-        res.setHeader('Content-Type', contentType || 'application/octet-stream');
-        
-        // 强制设置 CORS 头 (关键)
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-        res.setHeader('Cache-Control', 'public, max-age=31536000');
-        
-        // 管道转发流
-        response.body.pipe(res);
-        return;
-      } catch (proxyError) {
-         console.error(`Proxy failed for ${bucket}/${filename}:`, proxyError);
-         // 代理失败时返回占位图，避免浏览器报 ORB 错误
-         return sendPlaceholder(res, 'Error Loading Image');
+      const shouldProxy = String(req.query.proxy || '') === '1';
+
+      if (!shouldProxy) {
+        return res.redirect(302, access.url);
       }
+
+      const upstream = await fetch(access.url);
+
+      if (!upstream.ok) {
+        return sendPlaceholderSvg(res, 'Error Loading Image');
+      }
+
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+
+      const body = upstream.body;
+      if (!body) {
+        return sendPlaceholderSvg(res, 'Error Loading Image');
+      }
+
+      Readable.fromWeb(body).pipe(res);
+      return;
     }
 
     // 策略 2: 本地文件流 (Local/Vercel TMP)
@@ -102,8 +99,7 @@ const handleFileRequest = async (req, res, bucket, errorMessage) => {
     }
   } catch (error) {
     console.error(`${errorMessage}:`, error);
-    // 出错时也返回占位图
-    return sendPlaceholder(res, 'Server Error');
+    sendPlaceholderSvg(res, 'Error Loading Image');
   }
 };
 

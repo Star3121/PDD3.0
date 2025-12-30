@@ -218,32 +218,51 @@ class StorageService {
    * @param {string} mimeType 
    */
   async uploadProcessedImage(bucket, filename, localFilePath, mimeType) {
-    // 1. 上传原图
-    await this._uploadSingle(bucket, filename, localFilePath, mimeType);
+    const tasks = [];
+
+    // 1. 上传原图任务
+    tasks.push(this._uploadSingle(bucket, filename, localFilePath, mimeType));
 
     // 仅对图片生成缩略图
     if (mimeType.startsWith('image/')) {
       try {
+        // 读取文件 Buffer 用于生成缩略图
         const imageBuffer = fs.readFileSync(localFilePath);
         
-        // 生成 Medium (1024px)
-        const mediumBuffer = await sharp(imageBuffer)
-          .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-          .toBuffer();
-        await this._uploadSingle(bucket, `medium_${filename}`, mediumBuffer, mimeType);
+        // 2. 生成并上传 Medium (1024px) 任务
+        const mediumTask = (async () => {
+          try {
+            const mediumBuffer = await sharp(imageBuffer)
+              .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+              .toBuffer();
+            await this._uploadSingle(bucket, `medium_${filename}`, mediumBuffer, mimeType);
+          } catch (error) {
+            console.error(`[StorageService] Medium thumbnail failed for ${filename}:`, error);
+          }
+        })();
+        tasks.push(mediumTask);
 
-        // 生成 Thumb (512px)
-        const thumbBuffer = await sharp(imageBuffer)
-          .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
-          .toBuffer();
-        await this._uploadSingle(bucket, `thumb_${filename}`, thumbBuffer, mimeType);
+        // 3. 生成并上传 Thumb (512px) 任务
+        const thumbTask = (async () => {
+          try {
+            const thumbBuffer = await sharp(imageBuffer)
+              .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+              .toBuffer();
+            await this._uploadSingle(bucket, `thumb_${filename}`, thumbBuffer, mimeType);
+          } catch (error) {
+            console.error(`[StorageService] Small thumbnail failed for ${filename}:`, error);
+          }
+        })();
+        tasks.push(thumbTask);
         
-        console.log(`[StorageService] Generated thumbnails for ${filename}`);
       } catch (error) {
-        console.error(`[StorageService] Thumbnail generation failed for ${filename}:`, error);
-        // 缩略图失败不阻断流程
+        console.error(`[StorageService] Thumbnail generation preparation failed for ${filename}:`, error);
       }
     }
+
+    // 并行执行所有上传任务
+    await Promise.all(tasks);
+    console.log(`[StorageService] Uploaded ${filename} and thumbnails (if any) in parallel`);
   }
 
   // 兼容旧接口，不再推荐直接使用
@@ -254,7 +273,8 @@ class StorageService {
   async deleteFile(bucket, filename) {
     const filesToDelete = [filename, `medium_${filename}`, `thumb_${filename}`];
     
-    for (const f of filesToDelete) {
+    // 并行删除所有相关文件
+    const deletePromises = filesToDelete.map(async (f) => {
       try {
         if (this.provider === 's3') {
           const command = new DeleteObjectCommand({
@@ -275,7 +295,9 @@ class StorageService {
       } catch (e) {
         // 忽略删除不存在文件的错误
       }
-    }
+    });
+
+    await Promise.all(deletePromises);
   }
 }
 
