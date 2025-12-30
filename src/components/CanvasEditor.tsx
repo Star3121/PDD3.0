@@ -147,7 +147,7 @@ export interface CanvasEditorProps {
 // CanvasEditor 引用接口
 export interface CanvasEditorRef {
   addImage: (url: string, options?: fabric.IImageOptions) => void;
-  exportCanvas: (backgroundType?: 'transparent' | 'white', highResolution?: boolean) => string;
+  exportCanvas: (backgroundType?: 'transparent' | 'white', highResolution?: boolean, maxWidth?: number) => string;
   addCircleFrame: (x: number, y: number, radius: number) => void;
   uploadImageToFrame: (file: File) => void;
   getCanvasData: () => string;

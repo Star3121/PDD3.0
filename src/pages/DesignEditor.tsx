@@ -116,7 +116,8 @@ const DesignEditor: React.FC = () => {
     setSaving(true);
     try {
       const canvasData = canvasRef.current.getCanvasData();
-      const previewDataUrl = canvasRef.current.exportCanvas(backgroundType);
+      // 优化：使用 800px 宽度限制生成预览图，大幅减小体积 (JPEG/PNG 自动选择)
+      const previewDataUrl = canvasRef.current.exportCanvas(backgroundType, false, 800);
       
       // 将data URL转换为blob的更可靠方法
       const dataUrlToBlob = (dataUrl: string): Blob => {
@@ -132,7 +133,8 @@ const DesignEditor: React.FC = () => {
       };
 
       const blob = dataUrlToBlob(previewDataUrl);
-      const file = new File([blob], 'preview.png', { type: 'image/png' });
+      const ext = blob.type === 'image/jpeg' ? 'jpg' : 'png';
+      const file = new File([blob], `preview.${ext}`, { type: blob.type });
 
       const designData = {
         order_id: order.id,
