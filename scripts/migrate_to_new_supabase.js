@@ -98,7 +98,7 @@ async function fetchAllSupabase(supabase, table) {
 }
 
 async function exportFromOldSupabase() {
-  const sourceKey = process.env.OLD_SUPABASE_SECRET_KEY || process.env.OLD_SUPABASE_SERVICE_ROLE_KEY;
+  const sourceKey = process.env.OLD_SUPABASE_SECRET_KEY;
   if (!process.env.OLD_SUPABASE_URL || !sourceKey) {
     throw new Error('缺少环境变量: OLD_SUPABASE_URL / OLD_SUPABASE_SECRET_KEY');
   }
@@ -131,7 +131,7 @@ async function exportFromLocalSqlite() {
 }
 
 async function importToNewSupabase(dump) {
-  const destinationKey = process.env.NEW_SUPABASE_SECRET_KEY || process.env.NEW_SUPABASE_SERVICE_ROLE_KEY;
+  const destinationKey = process.env.NEW_SUPABASE_SECRET_KEY;
   if (!process.env.NEW_SUPABASE_URL || !destinationKey) {
     throw new Error('缺少环境变量: NEW_SUPABASE_URL / NEW_SUPABASE_SECRET_KEY');
   }

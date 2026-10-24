@@ -23,9 +23,8 @@
 
 #### 获取配置信息
 项目创建完成后，进入项目设置页面：
-- **项目URL**: `https://[your-project-ref].supabase.co`
-- **匿名密钥** (anon key): 在 Settings > API 页面
-- **服务角色密钥** (service_role key): 在 Settings > API 页面
+- **项目 URL**: `https://[your-project-ref].supabase.co`，在 Settings > API Keys 页面查看
+- **服务端密钥** (`sb_secret_`): 在 Settings > API Keys 页面创建，仅用于服务端
 
 ### 2. 数据库表结构
 
