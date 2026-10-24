@@ -55,10 +55,12 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_KEY=your_service_role_key
 
-# 可选：豆包AI配置（用于图像识别）
-VITE_DOUBAO_API_KEY=your_doubao_api_key
-VITE_DOUBAO_API_BASE=https://ark.cn-beijing.volces.com/api/v3
-VITE_DOUBAO_MODEL=ep-20241215115442-6d8r5
+# 可选：豆包AI服务端配置（禁止使用 VITE_ 前缀）
+# 首次部署保持 false，验证其他功能后再启用
+DOUBAO_AI_ENABLED=false
+DOUBAO_API_KEY=your_doubao_api_key
+DOUBAO_API_BASE=https://ark.cn-beijing.volces.com/api/v3
+DOUBAO_MODEL=ep-20241215115442-6d8r5
 ```
 
 ### 4. 本地测试

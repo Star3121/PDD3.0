@@ -23,22 +23,27 @@
    cp .env.example .env
    ```
 
-2. 编辑 `.env` 文件，填入您的API Key：
+2. 编辑 `.env` 文件，在服务端填入API Key：
    ```env
-   VITE_DOUBAO_API_KEY=your_actual_api_key_here
+   DOUBAO_AI_ENABLED=false
+   DOUBAO_API_KEY=your_actual_api_key_here
    ```
 
 3. （可选）如果需要自定义API配置：
    ```env
-   VITE_DOUBAO_API_BASE=https://ark.cn-beijing.volces.com/api/v3
-   VITE_DOUBAO_MODEL=your_model_id
+   DOUBAO_API_BASE=https://ark.cn-beijing.volces.com/api/v3
+   DOUBAO_MODEL=your_model_id
    ```
+
+4. 部署并确认前端不再包含API Key后，再设置 `DOUBAO_AI_ENABLED=true`。
+
+> `DOUBAO_API_KEY` 等敏感变量禁止使用 `VITE_` 前缀。`VITE_` 变量会被编译进浏览器静态文件，不能用于保密。
 
 ### 3. 重启开发服务器
 
-配置完成后，重启前端开发服务器：
+配置完成后，重启前后端开发服务：
 ```bash
-npm run dev:frontend
+npm run dev
 ```
 
 ## 使用方法
@@ -85,9 +90,9 @@ AI识别可以自动填充以下字段：
 
 ### 常见错误及解决方案
 
-1. **"豆包API Key未配置"**
-   - 检查 `.env` 文件中的 `VITE_DOUBAO_API_KEY` 是否正确设置
-   - 确保重启了开发服务器
+1. **"AI识别功能暂未启用"**
+   - 检查服务端是否同时配置 `DOUBAO_API_KEY` 和 `DOUBAO_AI_ENABLED=true`
+   - 确保配置修改后重启了后端服务
 
 2. **"豆包API调用失败"**
    - 检查API Key是否有效
@@ -107,6 +112,7 @@ AI识别可以自动填充以下字段：
 1. **API Key保护**
    - 不要将 `.env` 文件提交到版本控制系统
    - 不要在代码中硬编码API Key
+   - 不要将API Key配置为任何 `VITE_` 环境变量
    - 定期更换API Key
 
 2. **数据隐私**

@@ -13,29 +13,7 @@ export interface OrderRecognitionResult {
   orderNotes: string;
 }
 
-// 豆包API配置
-const DOUBAO_API_BASE = import.meta.env.VITE_DOUBAO_API_BASE || 'https://ark.cn-beijing.volces.com/api/v3';
-const DOUBAO_MODEL = import.meta.env.VITE_DOUBAO_MODEL || 'ep-20241016231643-rvmkw'; // 豆包模型ID
-
 class DoubaoService {
-  private apiKey: string;
-  private apiBase: string;
-  private model: string;
-
-  constructor() {
-    this.apiKey = import.meta.env.VITE_DOUBAO_API_KEY || '';
-    this.apiBase = DOUBAO_API_BASE;
-    this.model = DOUBAO_MODEL;
-  }
-
-  // 检查API Key是否配置
-  private checkApiKey(): boolean {
-    if (!this.apiKey) {
-      throw new Error('豆包API Key未配置，请在环境变量中设置 VITE_DOUBAO_API_KEY');
-    }
-    return true;
-  }
-
   // 规范化产品类别
   private normalizeProductCategory(category: string): string {
     if (!category) return '';
@@ -55,28 +33,21 @@ class DoubaoService {
 
   // 调用豆包API的通用方法
   private async callDoubaoAPI(messages: any[]): Promise<string> {
-    this.checkApiKey();
-
-    const response = await fetch(`${this.apiBase}/chat/completions`, {
+    const response = await fetch('/api/ai/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages: messages,
-        temperature: 0.1,
-        max_tokens: 2000,
-      }),
+      body: JSON.stringify({ messages }),
     });
 
     if (!response.ok) {
-      throw new Error(`豆包API调用失败: ${response.status} ${response.statusText}`);
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || `AI识别请求失败: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || '';
+    return data.content || '';
   }
 
   // 单个订单文本识别

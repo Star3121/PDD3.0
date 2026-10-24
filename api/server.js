@@ -9,6 +9,7 @@ import designsRouter, { setDatabase as setDesignsDatabase } from './routes/desig
 import uploadRouter, { setDatabase as setUploadDatabase } from './routes/upload.js';
 import categoriesRouter, { setDatabase as setCategoriesDatabase } from './routes/categories.js';
 import filesRouter from './routes/files.js';
+import doubaoRouter from './routes/doubao.js';
 import { db as supabaseDb } from './database.supabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -140,6 +141,7 @@ app.use('/api/designs', designsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/files', filesRouter);
+app.use('/api/ai', doubaoRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {
