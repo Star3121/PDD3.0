@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "build:vercel": "npm run build",
     "build:static": "node scripts/generate-static-data.js",
+    "check:secrets": "node scripts/check-secrets.js",
     "vercel-build": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview",
