@@ -2,11 +2,11 @@
 /*
   自动化迁移脚本：将数据从旧项目导出到新的 Supabase 项目。
   支持数据源：
-  - OLD_SUPABASE_URL + OLD_SUPABASE_SERVICE_ROLE_KEY （推荐）
+  - OLD_SUPABASE_URL + OLD_SUPABASE_SECRET_KEY （推荐）
   - 或者 OLD_DB_TYPE=sqlite + LOCAL_SQLITE_PATH （回退方案）
 
   目标：
-  - NEW_SUPABASE_URL + NEW_SUPABASE_SERVICE_ROLE_KEY
+  - NEW_SUPABASE_URL + NEW_SUPABASE_SECRET_KEY
 
   说明：
   - 先在新 Supabase 项目中应用结构迁移（项目内 supabase/migrations/001-003）。
@@ -98,8 +98,11 @@ async function fetchAllSupabase(supabase, table) {
 }
 
 async function exportFromOldSupabase() {
-  requireEnv(['OLD_SUPABASE_URL', 'OLD_SUPABASE_SERVICE_ROLE_KEY']);
-  const supabase = createClient(process.env.OLD_SUPABASE_URL, process.env.OLD_SUPABASE_SERVICE_ROLE_KEY);
+  const sourceKey = process.env.OLD_SUPABASE_SECRET_KEY || process.env.OLD_SUPABASE_SERVICE_ROLE_KEY;
+  if (!process.env.OLD_SUPABASE_URL || !sourceKey) {
+    throw new Error('缺少环境变量: OLD_SUPABASE_URL / OLD_SUPABASE_SECRET_KEY');
+  }
+  const supabase = createClient(process.env.OLD_SUPABASE_URL, sourceKey);
   const dump = {};
   for (const t of TABLES) {
     log(`导出表: ${t}`);
@@ -128,8 +131,11 @@ async function exportFromLocalSqlite() {
 }
 
 async function importToNewSupabase(dump) {
-  requireEnv(['NEW_SUPABASE_URL', 'NEW_SUPABASE_SERVICE_ROLE_KEY']);
-  const supabase = createClient(process.env.NEW_SUPABASE_URL, process.env.NEW_SUPABASE_SERVICE_ROLE_KEY);
+  const destinationKey = process.env.NEW_SUPABASE_SECRET_KEY || process.env.NEW_SUPABASE_SERVICE_ROLE_KEY;
+  if (!process.env.NEW_SUPABASE_URL || !destinationKey) {
+    throw new Error('缺少环境变量: NEW_SUPABASE_URL / NEW_SUPABASE_SECRET_KEY');
+  }
+  const supabase = createClient(process.env.NEW_SUPABASE_URL, destinationKey);
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 

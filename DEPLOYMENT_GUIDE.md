@@ -52,8 +52,7 @@
 ```env
 # Supabase 配置
 SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_KEY=your_service_role_key
+SUPABASE_SECRET_KEY=your_sb_secret_key
 
 # 可选：豆包AI服务端配置（禁止使用 VITE_ 前缀）
 # 首次部署保持 false，验证其他功能后再启用

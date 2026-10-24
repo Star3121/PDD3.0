@@ -23,7 +23,8 @@ const isServerless = !!process.env.VERCEL;
 // 初始化数据库 - 优先使用Supabase，回退到SQLite
 let db;
 try {
-  if (process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY)) {
+  const hasSupabaseServerKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  if (process.env.SUPABASE_URL && hasSupabaseServerKey) {
     db = supabaseDb;
     console.log('使用Supabase数据库');
   } else {
